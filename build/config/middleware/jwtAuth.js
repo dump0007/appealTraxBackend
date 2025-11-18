@@ -24,8 +24,12 @@ function isAuthenticated(req, res, next) {
     console.log(token);
     if (token) {
         try {
-            const user = jwt.verify(token.toString(), server_1.default.get('secret'));
-            req.user = user;
+            const decoded = jwt.verify(token.toString(), server_1.default.get('secret'));
+            req.user = decoded;
+            // Extract email for convenience
+            if (decoded && typeof decoded === 'object' && 'email' in decoded) {
+                req.email = decoded.email;
+            }
             return next();
         }
         catch (error) {

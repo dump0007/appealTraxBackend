@@ -4,8 +4,15 @@ import * as http from 'http';
 import app from '../server/server';
 import HttpError from '../error';
 
+interface JWTPayload {
+    email: string;
+    iat?: number;
+    exp?: number;
+}
+
 interface RequestWithUser extends Request {
-    user: object | string;
+    user: JWTPayload | string;
+    email?: string; // Extracted email for convenience
 }
 
 /**
@@ -27,9 +34,13 @@ export function isAuthenticated(req: RequestWithUser, res: Response, next: NextF
     console.log(token);
     if (token) {
         try {
-            const user: object | string = jwt.verify(token.toString(), app.get('secret'));
-
-            req.user = user;
+            const decoded = jwt.verify(token.toString(), app.get('secret')) as JWTPayload;
+            
+            req.user = decoded;
+            // Extract email for convenience
+            if (decoded && typeof decoded === 'object' && 'email' in decoded) {
+                req.email = decoded.email;
+            }
 
             return next();
         } catch (error) {

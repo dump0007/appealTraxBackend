@@ -65,6 +65,7 @@ export interface IProceedingModel extends Document {
     argumentDetails?: IArgumentDetails;
     decisionDetails?: IDecisionDetails;
     createdBy: Types.ObjectId; // Officer ref
+    email: string; // User email who created this proceeding
     attachments: {
         fileName: string;
         fileUrl: string;
@@ -141,6 +142,7 @@ const ProceedingSchema: Schema<IProceedingModel> = new Schema({
     argumentDetails: ArgumentDetailsSubSchema,
     decisionDetails: DecisionDetailsSubSchema,
     createdBy: { type: Schema.Types.ObjectId, ref: 'UserModel', required: true, index: true },
+    email: { type: String, required: true, trim: true, index: true },
     attachments: { type: [AttachmentSubSchema], default: [] },
 }, {
     collection: 'proceeding',
@@ -150,6 +152,7 @@ const ProceedingSchema: Schema<IProceedingModel> = new Schema({
 
 ProceedingSchema.index({ fir: 1, createdAt: -1 });
 ProceedingSchema.index({ fir: 1, sequence: 1 }, { unique: true });
+ProceedingSchema.index({ email: 1, createdAt: -1 });
 
 // Auto-increment sequence per FIR
 ProceedingSchema.pre('validate', async function (next) {

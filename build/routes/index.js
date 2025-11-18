@@ -25,7 +25,19 @@ function init(app) {
      * @constructs
      */
     app.use('/v1/users', jwtConfig.isAuthenticated, UserRouter_1.default);
-    app.use('/v1/firs', FIRRouter_1.default);
+    /**
+     * @description
+     *  Forwards any requests to the /v1/firs URI to our FIRRouter
+     *  Also, check if user authenticated
+     * @constructs
+     */
+    app.use('/v1/firs', jwtConfig.isAuthenticated, FIRRouter_1.default);
+    /**
+     * @description
+     *  Forwards any requests to the /v1/proceedings URI to our ProceedingRouter
+     *  Also, check if user authenticated
+     * @constructs
+     */
     app.use('/v1/proceedings', jwtConfig.isAuthenticated, ProceedingRouter_1.default);
     /**
      * @description Forwards any requests to the /auth URI to our AuthRouter

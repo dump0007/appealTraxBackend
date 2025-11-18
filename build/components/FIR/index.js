@@ -13,9 +13,14 @@ exports.search = exports.cityGraph = exports.dashboard = exports.remove = export
 const service_1 = require("./service");
 const error_1 = require("../../config/error");
 function findAll(req, res, next) {
+    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const firs = yield service_1.default.findAll();
+            const email = req.email || ((_a = req.user) === null || _a === void 0 ? void 0 : _a.email);
+            if (!email) {
+                return next(new error_1.HttpError(401, 'User email not found in token'));
+            }
+            const firs = yield service_1.default.findAll(email);
             res.status(200).json(firs);
         }
         catch (error) {
@@ -25,9 +30,14 @@ function findAll(req, res, next) {
 }
 exports.findAll = findAll;
 function findOne(req, res, next) {
+    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const fir = yield service_1.default.findOne(req.params.id);
+            const email = req.email || ((_a = req.user) === null || _a === void 0 ? void 0 : _a.email);
+            if (!email) {
+                return next(new error_1.HttpError(401, 'User email not found in token'));
+            }
+            const fir = yield service_1.default.findOne(req.params.id, email);
             res.status(200).json(fir);
         }
         catch (error) {
@@ -37,9 +47,14 @@ function findOne(req, res, next) {
 }
 exports.findOne = findOne;
 function create(req, res, next) {
+    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const fir = yield service_1.default.insert(req.body);
+            const email = req.email || ((_a = req.user) === null || _a === void 0 ? void 0 : _a.email);
+            if (!email) {
+                return next(new error_1.HttpError(401, 'User email not found in token'));
+            }
+            const fir = yield service_1.default.insert(req.body, email);
             res.status(201).json(fir);
         }
         catch (error) {
@@ -49,9 +64,14 @@ function create(req, res, next) {
 }
 exports.create = create;
 function remove(req, res, next) {
+    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const fir = yield service_1.default.remove(req.params.id);
+            const email = req.email || ((_a = req.user) === null || _a === void 0 ? void 0 : _a.email);
+            if (!email) {
+                return next(new error_1.HttpError(401, 'User email not found in token'));
+            }
+            const fir = yield service_1.default.remove(req.params.id, email);
             res.status(200).json(fir);
         }
         catch (error) {
@@ -61,9 +81,14 @@ function remove(req, res, next) {
 }
 exports.remove = remove;
 function dashboard(req, res, next) {
+    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const fir = yield service_1.default.dashboard();
+            const email = req.email || ((_a = req.user) === null || _a === void 0 ? void 0 : _a.email);
+            if (!email) {
+                return next(new error_1.HttpError(401, 'User email not found in token'));
+            }
+            const fir = yield service_1.default.dashboard(email);
             res.status(200).json(fir);
         }
         catch (error) {
@@ -73,9 +98,14 @@ function dashboard(req, res, next) {
 }
 exports.dashboard = dashboard;
 function cityGraph(req, res, next) {
+    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const graph = yield service_1.default.cityGraph();
+            const email = req.email || ((_a = req.user) === null || _a === void 0 ? void 0 : _a.email);
+            if (!email) {
+                return next(new error_1.HttpError(401, 'User email not found in token'));
+            }
+            const graph = yield service_1.default.cityGraph(email);
             res.status(200).json(graph);
         }
         catch (error) {
@@ -85,10 +115,15 @@ function cityGraph(req, res, next) {
 }
 exports.cityGraph = cityGraph;
 function search(req, res, next) {
+    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         try {
+            const email = req.email || ((_a = req.user) === null || _a === void 0 ? void 0 : _a.email);
+            if (!email) {
+                return next(new error_1.HttpError(401, 'User email not found in token'));
+            }
             const query = req.query.q || '';
-            const firs = yield service_1.default.search(query);
+            const firs = yield service_1.default.search(query, email);
             res.status(200).json(firs);
         }
         catch (error) {

@@ -30,6 +30,7 @@ export interface IFIRModel extends Document {
     respondents:string[];
     status: FIRStatus;
     linkedWrits?: Types.ObjectId[]; // Writ refs
+    email: string; // User email who created this FIR
     createdAt: Date;
     updatedAt: Date;
 }
@@ -60,6 +61,7 @@ const FIRSchema: Schema<IFIRModel> = new Schema({
         index: true,
     },
     linkedWrits: [{ type: Schema.Types.ObjectId, ref: 'WritModel' }],
+    email: { type: String, required: true, trim: true, index: true },
 }, {
     collection: 'fir',
     versionKey: false,
@@ -70,8 +72,10 @@ const FIRSchema: Schema<IFIRModel> = new Schema({
 
 FIRSchema.index({ branch: 1, dateOfFiling: -1 });
 FIRSchema.index({ investigatingOfficer: 1, status: 1 });
+FIRSchema.index({ email: 1, dateOfFiling: -1 });
 
 // Virtual populate for ordered proceedings timeline
+// Note: Email filtering is handled at the service level when populating
 FIRSchema.virtual('proceedings', {
     ref: 'ProceedingModel',
     localField: '_id',

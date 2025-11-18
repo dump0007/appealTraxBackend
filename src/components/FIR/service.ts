@@ -6,32 +6,53 @@ import { IFIRService } from './interface';
 import ProceedingModel, { IProceedingModel } from '../Proceeding/model';
 
 const FIRService: IFIRService = {
-    async findAll(): Promise<IFIRModel[]> {
+    async findAll(email: string): Promise<IFIRModel[]> {
         try {
-            return await FIRModel.find({}).populate('proceedings');
+            const firs = await FIRModel.find({ email });
+            // Manually populate proceedings filtered by email
+            for (const fir of firs) {
+                await fir.populate({
+                    path: 'proceedings',
+                    match: { email },
+                    options: { sort: { sequence: 1 } }
+                });
+            }
+            return firs;
         } catch (error) {
             throw new Error(error.message);
         }
     },
 
-    async findOne(id: string): Promise<IFIRModel> {
+    async findOne(id: string, email: string): Promise<IFIRModel> {
         try {
             const validate: Joi.ValidationResult = FIRValidation.byId({ id });
             if (validate.error) {
                 throw new Error(validate.error.message);
             }
-            return await FIRModel.findOne({ _id: new Types.ObjectId(id) }).populate('proceedings');
+            const fir = await FIRModel.findOne({ _id: new Types.ObjectId(id), email });
+            if (!fir) {
+                throw new Error('FIR not found or access denied');
+            }
+            // Manually populate proceedings filtered by email
+            await fir.populate({
+                path: 'proceedings',
+                match: { email },
+                options: { sort: { sequence: 1 } }
+            });
+            return fir;
         } catch (error) {
             throw new Error(error.message);
         }
     },
 
-    async insert(body: IFIRModel): Promise<IFIRModel> {
+    async insert(body: IFIRModel, email: string): Promise<IFIRModel> {
         try {
             const validate: Joi.ValidationResult = FIRValidation.create(body);
             if (validate.error) {
                 throw new Error(validate.error.message);
             }
+            // Set email from token
+            body.email = email;
             const fir: IFIRModel = await FIRModel.create(body);
 
             // Create initial proceeding for this FIR with sequence number 1
@@ -57,6 +78,7 @@ const FIRService: IFIRService = {
                         },
                     },
                     createdBy: new Types.ObjectId(), // Placeholder ObjectId - in production, this should be the actual officer ID
+                    email: email, // Set email from token
                 };
 
                 await ProceedingModel.create(initialProceeding);
@@ -71,19 +93,22 @@ const FIRService: IFIRService = {
         }
     },
 
-    async remove(id: string): Promise<IFIRModel> {
+    async remove(id: string, email: string): Promise<IFIRModel> {
         try {
             const validate: Joi.ValidationResult = FIRValidation.byId({ id });
             if (validate.error) {
                 throw new Error(validate.error.message);
             }
-            const fir: IFIRModel = await FIRModel.findOneAndRemove({ _id: new Types.ObjectId(id) });
+            const fir: IFIRModel = await FIRModel.findOneAndRemove({ _id: new Types.ObjectId(id), email });
+            if (!fir) {
+                throw new Error('FIR not found or access denied');
+            }
             return fir;
         } catch (error) {
             throw new Error(error.message);
         }
     },
-    async dashboard(): Promise<any> {
+    async dashboard(email: string): Promise<any> {
         try {
             const ongoingStatuses = [
                 'REGISTERED',
@@ -93,6 +118,7 @@ const FIRService: IFIRService = {
               ];
           
               const agg = await FIRModel.aggregate([
+                { $match: { email } }, // Filter by user email
                 {
                   $facet: {
                     statusCounts: [
@@ -139,9 +165,10 @@ const FIRService: IFIRService = {
             throw new Error(error.message);
         }
     },
-    async cityGraph(): Promise<any> {
+    async cityGraph(email: string): Promise<any> {
         try {
             return await FIRModel.aggregate([
+                { $match: { email } }, // Filter by user email
                 {
                     $group: {
                         _id: "$branch",
@@ -162,14 +189,15 @@ const FIRService: IFIRService = {
         }
     },
 
-    async search(query: string): Promise<IFIRModel[]> {
+    async search(query: string, email: string): Promise<IFIRModel[]> {
         try {
             if (!query || query.trim() === '') {
-                return await FIRModel.find({}).limit(100).sort({ dateOfFiling: -1 });
+                return await FIRModel.find({ email }).limit(100).sort({ dateOfFiling: -1 });
             }
 
             const searchRegex = new RegExp(query.trim(), 'i');
             return await FIRModel.find({
+                email, // Filter by user email
                 $or: [
                     { firNumber: searchRegex },
                     { petitionerName: searchRegex },

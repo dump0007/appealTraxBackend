@@ -27,7 +27,20 @@ export function init(app: express.Application): void {
      */
     app.use('/v1/users', jwtConfig.isAuthenticated, UserRouter);
 
-    app.use('/v1/firs', FIRRouter);
+    /**
+     * @description
+     *  Forwards any requests to the /v1/firs URI to our FIRRouter
+     *  Also, check if user authenticated
+     * @constructs
+     */
+    app.use('/v1/firs', jwtConfig.isAuthenticated, FIRRouter);
+
+    /**
+     * @description
+     *  Forwards any requests to the /v1/proceedings URI to our ProceedingRouter
+     *  Also, check if user authenticated
+     * @constructs
+     */
     app.use('/v1/proceedings', jwtConfig.isAuthenticated, ProceedingRouter);
 
     /**

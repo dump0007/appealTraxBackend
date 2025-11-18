@@ -14,37 +14,58 @@ const model_1 = require("./model");
 const validation_1 = require("./validation");
 const model_2 = require("../Proceeding/model");
 const FIRService = {
-    findAll() {
+    findAll(email) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                return yield model_1.default.find({}).populate('proceedings');
+                const firs = yield model_1.default.find({ email });
+                // Manually populate proceedings filtered by email
+                for (const fir of firs) {
+                    yield fir.populate({
+                        path: 'proceedings',
+                        match: { email },
+                        options: { sort: { sequence: 1 } }
+                    });
+                }
+                return firs;
             }
             catch (error) {
                 throw new Error(error.message);
             }
         });
     },
-    findOne(id) {
+    findOne(id, email) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const validate = validation_1.default.byId({ id });
                 if (validate.error) {
                     throw new Error(validate.error.message);
                 }
-                return yield model_1.default.findOne({ _id: new mongoose_1.Types.ObjectId(id) }).populate('proceedings');
+                const fir = yield model_1.default.findOne({ _id: new mongoose_1.Types.ObjectId(id), email });
+                if (!fir) {
+                    throw new Error('FIR not found or access denied');
+                }
+                // Manually populate proceedings filtered by email
+                yield fir.populate({
+                    path: 'proceedings',
+                    match: { email },
+                    options: { sort: { sequence: 1 } }
+                });
+                return fir;
             }
             catch (error) {
                 throw new Error(error.message);
             }
         });
     },
-    insert(body) {
+    insert(body, email) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const validate = validation_1.default.create(body);
                 if (validate.error) {
                     throw new Error(validate.error.message);
                 }
+                // Set email from token
+                body.email = email;
                 const fir = yield model_1.default.create(body);
                 // Create initial proceeding for this FIR with sequence number 1
                 try {
@@ -68,7 +89,8 @@ const FIRService = {
                                 mobile: String(fir.investigatingOfficerContact),
                             },
                         },
-                        createdBy: new mongoose_1.Types.ObjectId(), // Placeholder ObjectId - in production, this should be the actual officer ID
+                        createdBy: new mongoose_1.Types.ObjectId(),
+                        email: email, // Set email from token
                     };
                     yield model_2.default.create(initialProceeding);
                 }
@@ -83,14 +105,17 @@ const FIRService = {
             }
         });
     },
-    remove(id) {
+    remove(id, email) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const validate = validation_1.default.byId({ id });
                 if (validate.error) {
                     throw new Error(validate.error.message);
                 }
-                const fir = yield model_1.default.findOneAndRemove({ _id: new mongoose_1.Types.ObjectId(id) });
+                const fir = yield model_1.default.findOneAndRemove({ _id: new mongoose_1.Types.ObjectId(id), email });
+                if (!fir) {
+                    throw new Error('FIR not found or access denied');
+                }
                 return fir;
             }
             catch (error) {
@@ -98,7 +123,7 @@ const FIRService = {
             }
         });
     },
-    dashboard() {
+    dashboard(email) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const ongoingStatuses = [
@@ -108,6 +133,7 @@ const FIRService = {
                     'CHARGESHEET_FILED',
                 ];
                 const agg = yield model_1.default.aggregate([
+                    { $match: { email } },
                     {
                         $facet: {
                             statusCounts: [
@@ -153,10 +179,11 @@ const FIRService = {
             }
         });
     },
-    cityGraph() {
+    cityGraph(email) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 return yield model_1.default.aggregate([
+                    { $match: { email } },
                     {
                         $group: {
                             _id: "$branch",
@@ -178,14 +205,15 @@ const FIRService = {
             }
         });
     },
-    search(query) {
+    search(query, email) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 if (!query || query.trim() === '') {
-                    return yield model_1.default.find({}).limit(100).sort({ dateOfFiling: -1 });
+                    return yield model_1.default.find({ email }).limit(100).sort({ dateOfFiling: -1 });
                 }
                 const searchRegex = new RegExp(query.trim(), 'i');
                 return yield model_1.default.find({
+                    email,
                     $or: [
                         { firNumber: searchRegex },
                         { petitionerName: searchRegex },

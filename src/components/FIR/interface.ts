@@ -1,13 +1,13 @@
 import { IFIRModel } from './model';
 
 export interface IFIRService {
-    findAll(): Promise<IFIRModel[]>;
-    findOne(id: string): Promise<IFIRModel>;
-    insert(body: IFIRModel): Promise<IFIRModel>;
-    remove(id: string): Promise<IFIRModel>;
-    dashboard(): Promise<any>;
-    cityGraph():Promise<any>;
-    search(query: string): Promise<IFIRModel[]>;
+    findAll(email: string): Promise<IFIRModel[]>;
+    findOne(id: string, email: string): Promise<IFIRModel>;
+    insert(body: IFIRModel, email: string): Promise<IFIRModel>;
+    remove(id: string, email: string): Promise<IFIRModel>;
+    dashboard(email: string): Promise<any>;
+    cityGraph(email: string): Promise<any>;
+    search(query: string, email: string): Promise<IFIRModel[]>;
 }
 
 

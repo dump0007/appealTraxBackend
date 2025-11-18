@@ -26,6 +26,7 @@ const FIRSchema = new mongoose_1.Schema({
         index: true,
     },
     linkedWrits: [{ type: mongoose_1.Schema.Types.ObjectId, ref: 'WritModel' }],
+    email: { type: String, required: true, trim: true, index: true },
 }, {
     collection: 'fir',
     versionKey: false,
@@ -35,7 +36,9 @@ const FIRSchema = new mongoose_1.Schema({
 });
 FIRSchema.index({ branch: 1, dateOfFiling: -1 });
 FIRSchema.index({ investigatingOfficer: 1, status: 1 });
+FIRSchema.index({ email: 1, dateOfFiling: -1 });
 // Virtual populate for ordered proceedings timeline
+// Note: Email filtering is handled at the service level when populating
 FIRSchema.virtual('proceedings', {
     ref: 'ProceedingModel',
     localField: '_id',

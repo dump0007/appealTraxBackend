@@ -5,9 +5,9 @@ import ProceedingValidation from './validation';
 import { IProceedingService } from './interface';
 
 const ProceedingService: IProceedingService = {
-    async findAll(): Promise<IProceedingModel[]> {
+    async findAll(email: string): Promise<IProceedingModel[]> {
         try {
-            return await ProceedingModel.find({})
+            return await ProceedingModel.find({ email })
                 .sort({ fir: 1, sequence: 1 })
                 .populate('fir')
                 .populate('createdBy');
@@ -16,13 +16,19 @@ const ProceedingService: IProceedingService = {
         }
     },
 
-    async findByFIR(firId: string): Promise<IProceedingModel[]> {
+    async findByFIR(firId: string, email: string): Promise<IProceedingModel[]> {
         try {
             const validate: Joi.ValidationResult = ProceedingValidation.byFIR({ firId });
             if (validate.error) {
                 throw new Error(validate.error.message);
             }
-            return await ProceedingModel.find({ fir: new Types.ObjectId(firId) })
+            // First verify the FIR belongs to this user
+            const FIRModel = (await import('../FIR/model')).default;
+            const fir = await FIRModel.findOne({ _id: new Types.ObjectId(firId), email });
+            if (!fir) {
+                throw new Error('FIR not found or access denied');
+            }
+            return await ProceedingModel.find({ fir: new Types.ObjectId(firId), email })
                 .sort({ sequence: 1 })
                 .populate('fir')
                 .populate('createdBy');
@@ -31,39 +37,120 @@ const ProceedingService: IProceedingService = {
         }
     },
 
-    async findOne(id: string): Promise<IProceedingModel> {
+    async findOne(id: string, email: string): Promise<IProceedingModel> {
         try {
             const validate: Joi.ValidationResult = ProceedingValidation.byId({ id });
             if (validate.error) {
                 throw new Error(validate.error.message);
             }
-            return await ProceedingModel.findOne({ _id: new Types.ObjectId(id) })
+            const proceeding = await ProceedingModel.findOne({ _id: new Types.ObjectId(id), email })
                 .populate('fir')
                 .populate('createdBy');
+            if (!proceeding) {
+                throw new Error('Proceeding not found or access denied');
+            }
+            return proceeding;
         } catch (error) {
             throw new Error(error.message);
         }
     },
 
-    async insert(body: IProceedingModel): Promise<IProceedingModel> {
+    async insert(body: IProceedingModel, email: string): Promise<IProceedingModel> {
         try {
-            const validate: Joi.ValidationResult = ProceedingValidation.create(body);
+            // Clean up empty date strings and empty objects before validation
+            if (body.noticeOfMotion) {
+                // Clean up empty date strings (handle both Date and string types)
+                const nextDate: any = body.noticeOfMotion.nextDateOfHearing;
+                if (nextDate === null || nextDate === undefined || 
+                    (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
+                    body.noticeOfMotion.nextDateOfHearing = undefined;
+                }
+                const replyDate: any = body.noticeOfMotion.replyFilingDate;
+                if (replyDate === null || replyDate === undefined || 
+                    (typeof replyDate === 'string' && String(replyDate).trim() === '')) {
+                    body.noticeOfMotion.replyFilingDate = undefined;
+                }
+                // Clean up empty person objects (if name is empty or missing)
+                if (body.noticeOfMotion.formatFilledBy) {
+                    if (!body.noticeOfMotion.formatFilledBy.name || body.noticeOfMotion.formatFilledBy.name.trim() === '') {
+                        body.noticeOfMotion.formatFilledBy = undefined;
+                    }
+                }
+                if (body.noticeOfMotion.appearingAG) {
+                    if (!body.noticeOfMotion.appearingAG.name || body.noticeOfMotion.appearingAG.name.trim() === '') {
+                        body.noticeOfMotion.appearingAG = undefined;
+                    }
+                }
+                if (body.noticeOfMotion.attendingOfficer) {
+                    if (!body.noticeOfMotion.attendingOfficer.name || body.noticeOfMotion.attendingOfficer.name.trim() === '') {
+                        body.noticeOfMotion.attendingOfficer = undefined;
+                    }
+                }
+            }
+            
+            // Clean up dates in other sections
+            if (body.replyTracking) {
+                const nextDate: any = body.replyTracking.nextDateOfHearing;
+                if (nextDate === null || nextDate === undefined || 
+                    (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
+                    body.replyTracking.nextDateOfHearing = undefined;
+                }
+            }
+            if (body.argumentDetails) {
+                const nextDate: any = body.argumentDetails.nextDateOfHearing;
+                if (nextDate === null || nextDate === undefined || 
+                    (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
+                    body.argumentDetails.nextDateOfHearing = undefined;
+                }
+            }
+            if (body.decisionDetails) {
+                const decisionDate: any = body.decisionDetails.dateOfDecision;
+                if (decisionDate === null || decisionDate === undefined || 
+                    (typeof decisionDate === 'string' && String(decisionDate).trim() === '')) {
+                    body.decisionDetails.dateOfDecision = undefined;
+                }
+            }
+            
+            // Ensure createdBy is set (controller should set it, but ensure it's there)
+            if (!body.createdBy) {
+                body.createdBy = new Types.ObjectId();
+            }
+            
+            const validationPayload: any = {
+                ...body,
+                createdBy: typeof body.createdBy === 'string'
+                    ? body.createdBy
+                    : (body.createdBy as Types.ObjectId).toHexString(),
+            };
+            
+            const validate: Joi.ValidationResult = ProceedingValidation.create(validationPayload);
             if (validate.error) {
                 throw new Error(validate.error.message);
             }
+            // Verify the FIR belongs to this user
+            const FIRModel = (await import('../FIR/model')).default;
+            const fir = await FIRModel.findOne({ _id: body.fir, email });
+            if (!fir) {
+                throw new Error('FIR not found or access denied');
+            }
+            // Set email from token
+            body.email = email;
             return await ProceedingModel.create(body);
         } catch (error) {
             throw new Error(error.message);
         }
     },
 
-    async remove(id: string): Promise<IProceedingModel> {
+    async remove(id: string, email: string): Promise<IProceedingModel> {
         try {
             const validate: Joi.ValidationResult = ProceedingValidation.byId({ id });
             if (validate.error) {
                 throw new Error(validate.error.message);
             }
-            const proceeding: IProceedingModel = await ProceedingModel.findOneAndRemove({ _id: new Types.ObjectId(id) });
+            const proceeding: IProceedingModel = await ProceedingModel.findOneAndRemove({ _id: new Types.ObjectId(id), email });
+            if (!proceeding) {
+                throw new Error('Proceeding not found or access denied');
+            }
             return proceeding;
         } catch (error) {
             throw new Error(error.message);

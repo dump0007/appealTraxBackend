@@ -1,11 +1,11 @@
 import { IProceedingModel } from './model';
 
 export interface IProceedingService {
-    findAll(): Promise<IProceedingModel[]>;
-    findByFIR(firId: string): Promise<IProceedingModel[]>;
-    findOne(id: string): Promise<IProceedingModel>;
-    insert(body: IProceedingModel): Promise<IProceedingModel>;
-    remove(id: string): Promise<IProceedingModel>;
+    findAll(email: string): Promise<IProceedingModel[]>;
+    findByFIR(firId: string, email: string): Promise<IProceedingModel[]>;
+    findOne(id: string, email: string): Promise<IProceedingModel>;
+    insert(body: IProceedingModel, email: string): Promise<IProceedingModel>;
+    remove(id: string, email: string): Promise<IProceedingModel>;
 }
 
 

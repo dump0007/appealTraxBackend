@@ -72,6 +72,7 @@ const ProceedingSchema = new mongoose_1.Schema({
     argumentDetails: ArgumentDetailsSubSchema,
     decisionDetails: DecisionDetailsSubSchema,
     createdBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'UserModel', required: true, index: true },
+    email: { type: String, required: true, trim: true, index: true },
     attachments: { type: [AttachmentSubSchema], default: [] },
 }, {
     collection: 'proceeding',
@@ -80,6 +81,7 @@ const ProceedingSchema = new mongoose_1.Schema({
 });
 ProceedingSchema.index({ fir: 1, createdAt: -1 });
 ProceedingSchema.index({ fir: 1, sequence: 1 }, { unique: true });
+ProceedingSchema.index({ email: 1, createdAt: -1 });
 // Auto-increment sequence per FIR
 ProceedingSchema.pre('validate', function (next) {
     return __awaiter(this, void 0, void 0, function* () {

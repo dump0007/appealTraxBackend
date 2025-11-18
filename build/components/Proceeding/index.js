@@ -14,9 +14,14 @@ const mongoose_1 = require("mongoose");
 const service_1 = require("./service");
 const error_1 = require("../../config/error");
 function findAll(req, res, next) {
+    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const items = yield service_1.default.findAll();
+            const email = req.email || ((_a = req.user) === null || _a === void 0 ? void 0 : _a.email);
+            if (!email) {
+                return next(new error_1.HttpError(401, 'User email not found in token'));
+            }
+            const items = yield service_1.default.findAll(email);
             res.status(200).json(items);
         }
         catch (error) {
@@ -26,9 +31,14 @@ function findAll(req, res, next) {
 }
 exports.findAll = findAll;
 function findByFIR(req, res, next) {
+    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const items = yield service_1.default.findByFIR(req.params.firId);
+            const email = req.email || ((_a = req.user) === null || _a === void 0 ? void 0 : _a.email);
+            if (!email) {
+                return next(new error_1.HttpError(401, 'User email not found in token'));
+            }
+            const items = yield service_1.default.findByFIR(req.params.firId, email);
             res.status(200).json(items);
         }
         catch (error) {
@@ -38,9 +48,14 @@ function findByFIR(req, res, next) {
 }
 exports.findByFIR = findByFIR;
 function findOne(req, res, next) {
+    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const item = yield service_1.default.findOne(req.params.id);
+            const email = req.email || ((_a = req.user) === null || _a === void 0 ? void 0 : _a.email);
+            if (!email) {
+                return next(new error_1.HttpError(401, 'User email not found in token'));
+            }
+            const item = yield service_1.default.findOne(req.params.id, email);
             res.status(200).json(item);
         }
         catch (error) {
@@ -50,14 +65,18 @@ function findOne(req, res, next) {
 }
 exports.findOne = findOne;
 function create(req, res, next) {
+    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         try {
+            const email = req.email || ((_a = req.user) === null || _a === void 0 ? void 0 : _a.email);
+            if (!email) {
+                return next(new error_1.HttpError(401, 'User email not found in token'));
+            }
             // Extract user info from request if available (from JWT auth)
             let createdBy;
             if (req.user) {
                 // If user is authenticated, use a placeholder ObjectId for now
                 // In production, you would look up the Officer by email and use their _id
-                const userEmail = typeof req.user === 'object' ? req.user.email : null;
                 // For now, create a placeholder ObjectId - can be updated to use actual officer ID
                 createdBy = new mongoose_1.Types.ObjectId();
             }
@@ -70,7 +89,7 @@ function create(req, res, next) {
             if (!body.createdBy) {
                 body.createdBy = createdBy;
             }
-            const item = yield service_1.default.insert(body);
+            const item = yield service_1.default.insert(body, email);
             res.status(201).json(item);
         }
         catch (error) {
@@ -80,9 +99,14 @@ function create(req, res, next) {
 }
 exports.create = create;
 function remove(req, res, next) {
+    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const item = yield service_1.default.remove(req.params.id);
+            const email = req.email || ((_a = req.user) === null || _a === void 0 ? void 0 : _a.email);
+            if (!email) {
+                return next(new error_1.HttpError(401, 'User email not found in token'));
+            }
+            const item = yield service_1.default.remove(req.params.id, email);
             res.status(200).json(item);
         }
         catch (error) {

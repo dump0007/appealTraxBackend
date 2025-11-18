@@ -11,7 +11,12 @@ class ProceedingValidation extends validation_1.default {
             name: Joi.string().trim().required(),
             rank: Joi.string().trim().allow('', null),
             mobile: Joi.string().trim().allow('', null),
-        });
+        }).allow(null);
+        const personSchemaOptional = Joi.object({
+            name: Joi.string().trim().allow('', null),
+            rank: Joi.string().trim().allow('', null),
+            mobile: Joi.string().trim().allow('', null),
+        }).allow(null);
         const hearingDetailsSchema = Joi.object({
             dateOfHearing: Joi.date().required(),
             judgeName: Joi.string().trim().allow('', null).default(''),
@@ -20,14 +25,26 @@ class ProceedingValidation extends validation_1.default {
         const noticeOfMotionSchema = Joi.object({
             attendanceMode: Joi.string().valid('BY_FORMAT', 'BY_PERSON').allow(null, ''),
             formatSubmitted: Joi.boolean().allow(null),
-            formatFilledBy: personSchema.allow(null),
-            appearingAG: personSchema.allow(null),
-            attendingOfficer: personSchema.allow(null),
-            nextDateOfHearing: Joi.date().allow(null),
+            // formatFilledBy is only required when attendanceMode is BY_FORMAT
+            formatFilledBy: personSchemaOptional,
+            // appearingAG and attendingOfficer are only required when attendanceMode is BY_PERSON
+            appearingAG: personSchemaOptional,
+            attendingOfficer: personSchemaOptional,
+            nextDateOfHearing: Joi.alternatives().try(Joi.date().allow(null), Joi.string().allow('', null).custom((value, helpers) => {
+                if (!value || value === '')
+                    return null;
+                const date = new Date(value);
+                return isNaN(date.getTime()) ? helpers.error('date.invalid') : date;
+            })),
             officerDeputedForReply: Joi.string().trim().allow('', null),
             vettingOfficerDetails: Joi.string().trim().allow('', null),
             replyFiled: Joi.boolean().allow(null),
-            replyFilingDate: Joi.date().allow(null),
+            replyFilingDate: Joi.alternatives().try(Joi.date().allow(null), Joi.string().allow('', null).custom((value, helpers) => {
+                if (!value || value === '')
+                    return null;
+                const date = new Date(value);
+                return isNaN(date.getTime()) ? helpers.error('date.invalid') : date;
+            })),
             advocateGeneralName: Joi.string().trim().allow('', null),
             investigatingOfficerName: Joi.string().trim().allow('', null),
             replyScrutinizedByHC: Joi.boolean().allow(null),
@@ -36,16 +53,31 @@ class ProceedingValidation extends validation_1.default {
             proceedingInCourt: Joi.string().trim().allow('', null),
             orderInShort: Joi.string().trim().allow('', null),
             nextActionablePoint: Joi.string().trim().allow('', null),
-            nextDateOfHearing: Joi.date().allow(null),
+            nextDateOfHearing: Joi.alternatives().try(Joi.date().allow(null), Joi.string().allow('', null).custom((value, helpers) => {
+                if (!value || value === '')
+                    return null;
+                const date = new Date(value);
+                return isNaN(date.getTime()) ? helpers.error('date.invalid') : date;
+            })),
         }).unknown(false);
         const argumentDetailsSchema = Joi.object({
-            nextDateOfHearing: Joi.date().allow(null),
+            nextDateOfHearing: Joi.alternatives().try(Joi.date().allow(null), Joi.string().allow('', null).custom((value, helpers) => {
+                if (!value || value === '')
+                    return null;
+                const date = new Date(value);
+                return isNaN(date.getTime()) ? helpers.error('date.invalid') : date;
+            })),
         }).unknown(false);
         const decisionDetailsSchema = Joi.object({
             writStatus: Joi.string().valid('ALLOWED', 'PENDING', 'DISMISSED', 'WITHDRAWN', 'DIRECTION').required(),
             remarks: Joi.string().trim().allow('', null),
             decisionByCourt: Joi.string().trim().allow('', null),
-            dateOfDecision: Joi.date().allow(null),
+            dateOfDecision: Joi.alternatives().try(Joi.date().allow(null), Joi.string().allow('', null).custom((value, helpers) => {
+                if (!value || value === '')
+                    return null;
+                const date = new Date(value);
+                return isNaN(date.getTime()) ? helpers.error('date.invalid') : date;
+            })),
         }).unknown(false);
         const schema = Joi.object({
             fir: this.customJoi.objectId().required(),
@@ -73,7 +105,7 @@ class ProceedingValidation extends validation_1.default {
                 then: decisionDetailsSchema.allow(null),
                 otherwise: Joi.optional().allow(null),
             }),
-            createdBy: this.customJoi.objectId().required(),
+            createdBy: this.customJoi.objectId().allow(null),
             attachments: Joi.array().items(Joi.object({
                 fileName: Joi.string().required(),
                 fileUrl: Joi.string().required(),
