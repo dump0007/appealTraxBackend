@@ -64,6 +64,15 @@ const FIRService = {
                 if (validate.error) {
                     throw new Error(validate.error.message);
                 }
+                // Normalize dateOfFiling to avoid timezone shifts (store as UTC midnight)
+                if (body.dateOfFiling) {
+                    if (typeof body.dateOfFiling === 'string') {
+                        body.dateOfFiling = new Date(`${body.dateOfFiling}T00:00:00.000Z`);
+                    }
+                    else {
+                        body.dateOfFiling = new Date(body.dateOfFiling);
+                    }
+                }
                 // Set email from token
                 body.email = email;
                 const fir = yield model_1.default.create(body);
