@@ -23,6 +23,8 @@
   "scripts": {
     "build": "tsc --skipLibCheck",
     "start": "tsc --skipLibCheck && node ./build/config/server/index.js",
+    "up": "npx pm2 start 'tsc --skipLibCheck && node ./build/config/server/index.js' --name appeal-trax-backend",
+    "down": "npx pm2 stop appeal-trax-backend && npx pm2 delete appeal-trax-backend",
     "ts:watch": "tsc -w",
     "test": "NODE_ENV=test mocha -r ts-node/register test/index.js --exit"
   },
@@ -39,10 +41,11 @@
     "express": "4.17.2",
     "helmet": "4.6.0",
     "joi": "17.5.0",
+    "jsonwebtoken": "8.5.1",
     "mongoose": "6.1.6",
+    "pm2": "^6.0.13",
     "ts-node": "10.4.0",
-    "util": "0.12.4",
-    "jsonwebtoken": "8.5.1"
+    "util": "0.12.4"
   },
   "devDependencies": {
     "@types/bcrypt": "5.0.0",
@@ -57,6 +60,7 @@
     "@types/express": "4.17.13",
     "@types/helmet": "4.0.0",
     "@types/joi": "17.2.3",
+    "@types/jsonwebtoken": "8.5.5",
     "@types/mongoose": "5.11.97",
     "@types/node": "17.0.9",
     "@types/supertest": "2.0.11",
@@ -76,7 +80,6 @@
     "supertest": "6.2.1",
     "swagger-jsdoc": "6.1.0",
     "swagger-ui-express": "4.3.0",
-    "typescript": "4.5.4",
-    "@types/jsonwebtoken": "8.5.5"
+    "typescript": "4.5.4"
   }
 }
