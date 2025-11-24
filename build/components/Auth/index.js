@@ -9,44 +9,43 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.login = exports.signup = void 0;
+exports.login = void 0;
 const jwt = require("jsonwebtoken");
 const server_1 = require("../../config/server/server");
 const service_1 = require("./service");
 const error_1 = require("../../config/error");
-/**
+/* Signup function commented out - signup functionality disabled
  * @export
  * @param {Request} req
  * @param {Response} res
  * @param {NextFunction} next
  * @returns {Promise < void >}
  */
-function signup(req, res, next) {
-    return __awaiter(this, void 0, void 0, function* () {
-        try {
-            const user = yield service_1.default.createUser(req.body);
-            const token = jwt.sign({ email: user.email }, server_1.default.get('secret'), {
-                expiresIn: '60m',
-            });
-            res.json({
-                status: 200,
-                logged: true,
-                token,
-                message: 'Sign in successfull',
-            });
+/*
+export async function signup(req: Request, res: Response, next: NextFunction): Promise < void > {
+    try {
+        const user: IUserModel = await AuthService.createUser(req.body);
+        const token: string = jwt.sign({ email: user.email }, app.get('secret'), {
+            expiresIn: '60m',
+        });
+
+        res.json({
+            status: 200,
+            logged: true,
+            token,
+            message: 'Sign in successfull',
+        });
+    } catch (error) {
+        if (error.code === 500) {
+            return next(new HttpError(error.message.status, error.message));
         }
-        catch (error) {
-            if (error.code === 500) {
-                return next(new error_1.default(error.message.status, error.message));
-            }
-            res.json({
-                status: 400,
-                message: error.message,
-            });
-        }
-    });
+        res.json({
+            status: 400,
+            message: error.message,
+        });
+    }
 }
-exports.signup = signup;
+*/
 /**
  * @export
  * @param {Request} req

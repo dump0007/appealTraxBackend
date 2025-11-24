@@ -6,7 +6,7 @@ import { AuthComponent } from '../components';
  */
 const router: Router = Router();
 
-/**
+/* Signup route commented out - signup functionality disabled
  * POST method route
  * @example http://localhost:PORT/signup
  * @swagger
@@ -42,7 +42,7 @@ const router: Router = Router();
  *              logged: false
  *              message: Email already exists
  */
-router.post('/signup', AuthComponent.signup);
+// router.post('/signup', AuthComponent.signup);
 
 /**
  * POST method route

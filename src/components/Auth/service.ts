@@ -8,11 +8,12 @@ import { IAuthService } from './interface';
  * @implements {IAuthService}
  */
 const AuthService: IAuthService = {
-    /**
+    /* createUser function commented out - signup functionality disabled
      * @param {IUserModel} body
      * @returns {Promise <IUserModel>}
      * @memberof AuthService
      */
+    /*
     async createUser(body: IUserModel): Promise < IUserModel > {
         try {
             const validate: Joi.ValidationResult = AuthValidation.createUser(body);
@@ -41,6 +42,7 @@ const AuthService: IAuthService = {
             throw new Error(error);
         }
     },
+    */
     /**
      * @param {IUserModel} body
      * @returns {Promise <IUserModel>}

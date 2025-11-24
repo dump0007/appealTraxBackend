@@ -6,7 +6,7 @@ const components_1 = require("../components");
  * @constant {express.Router}
  */
 const router = (0, express_1.Router)();
-/**
+/* Signup route commented out - signup functionality disabled
  * POST method route
  * @example http://localhost:PORT/signup
  * @swagger
@@ -42,7 +42,7 @@ const router = (0, express_1.Router)();
  *              logged: false
  *              message: Email already exists
  */
-router.post('/signup', components_1.AuthComponent.signup);
+// router.post('/signup', AuthComponent.signup);
 /**
  * POST method route
  * @example http://localhost:PORT/login

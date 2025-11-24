@@ -5,12 +5,12 @@ import { IUserModel } from '../User/model';
  * @interaface IAuthService
  */
 export interface IAuthService {
-    /**
+    /* createUser method commented out - signup functionality disabled
      * @param {IUserModel} userModel
      * @returns {Promise<IUserModel>}
      * @memberof AuthService
      */
-    createUser(userModel: IUserModel): Promise < IUserModel > ;
+    // createUser(userModel: IUserModel): Promise < IUserModel > ;
     /**
      * @param {IUserModel} userModel
      * @returns {Promise<IUserModel>}

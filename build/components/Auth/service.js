@@ -16,36 +16,41 @@ const model_1 = require("../User/model");
  * @implements {IAuthService}
  */
 const AuthService = {
-    /**
+    /* createUser function commented out - signup functionality disabled
      * @param {IUserModel} body
      * @returns {Promise <IUserModel>}
      * @memberof AuthService
      */
-    createUser(body) {
-        return __awaiter(this, void 0, void 0, function* () {
-            try {
-                const validate = validation_1.default.createUser(body);
-                if (validate.error) {
-                    throw new Error(validate.error.message);
-                }
-                const user = new model_1.default({
-                    email: body.email,
-                    password: body.password,
-                });
-                const query = yield model_1.default.findOne({
-                    email: body.email,
-                });
-                if (query) {
-                    throw new Error('This email already exists');
-                }
-                const saved = yield user.save();
-                return saved;
+    /*
+    async createUser(body: IUserModel): Promise < IUserModel > {
+        try {
+            const validate: Joi.ValidationResult = AuthValidation.createUser(body);
+
+            if (validate.error) {
+                throw new Error(validate.error.message);
             }
-            catch (error) {
-                throw new Error(error);
+
+            const user: IUserModel = new UserModel({
+                email: body.email,
+                password: body.password,
+            });
+
+            const query: IUserModel = await UserModel.findOne({
+                email: body.email,
+            });
+
+            if (query) {
+                throw new Error('This email already exists');
             }
-        });
+
+            const saved: IUserModel = await user.save();
+
+            return saved;
+        } catch (error) {
+            throw new Error(error);
+        }
     },
+    */
     /**
      * @param {IUserModel} body
      * @returns {Promise <IUserModel>}
