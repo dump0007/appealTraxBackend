@@ -73,6 +73,7 @@ const ProceedingSchema = new mongoose_1.Schema({
     decisionDetails: DecisionDetailsSubSchema,
     createdBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'UserModel', required: true, index: true },
     email: { type: String, required: true, trim: true, index: true },
+    draft: { type: Boolean, default: false, index: true },
     attachments: { type: [AttachmentSubSchema], default: [] },
 }, {
     collection: 'proceeding',
@@ -82,15 +83,21 @@ const ProceedingSchema = new mongoose_1.Schema({
 ProceedingSchema.index({ fir: 1, createdAt: -1 });
 ProceedingSchema.index({ fir: 1, sequence: 1 }, { unique: true });
 ProceedingSchema.index({ email: 1, createdAt: -1 });
-// Auto-increment sequence per FIR
+// Auto-increment sequence per FIR (only for non-draft proceedings)
 ProceedingSchema.pre('validate', function (next) {
     return __awaiter(this, void 0, void 0, function* () {
         const doc = this;
         try {
             if (doc.isNew && (doc.sequence === undefined || doc.sequence === null)) {
-                // Find the last sequence for this FIR
-                const last = yield this.constructor.findOne({ fir: doc.fir }).sort({ sequence: -1 }).select('sequence').lean();
-                doc.sequence = last && typeof last.sequence === 'number' ? last.sequence + 1 : 1;
+                // For drafts, use sequence 0 (temporary), for final proceedings, find last non-draft sequence
+                if (doc.draft) {
+                    doc.sequence = 0; // Drafts use sequence 0
+                }
+                else {
+                    // Find the last non-draft sequence for this FIR
+                    const last = yield this.constructor.findOne({ fir: doc.fir, draft: false }).sort({ sequence: -1 }).select('sequence').lean();
+                    doc.sequence = last && typeof last.sequence === 'number' ? last.sequence + 1 : 1;
+                }
             }
             next();
         }

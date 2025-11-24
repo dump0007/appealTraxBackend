@@ -3,7 +3,6 @@ import { Types } from 'mongoose';
 import FIRModel, { IFIRModel } from './model';
 import FIRValidation from './validation';
 import { IFIRService } from './interface';
-import ProceedingModel, { IProceedingModel } from '../Proceeding/model';
 
 const FIRService: IFIRService = {
     async findAll(email: string): Promise<IFIRModel[]> {
@@ -51,50 +50,65 @@ const FIRService: IFIRService = {
             if (validate.error) {
                 throw new Error(validate.error.message);
             }
-            // Normalize dateOfFiling to avoid timezone shifts (store as UTC midnight)
-            if (body.dateOfFiling) {
-                if (typeof body.dateOfFiling === 'string') {
-                    body.dateOfFiling = new Date(`${body.dateOfFiling}T00:00:00.000Z`);
-                } else {
-                    body.dateOfFiling = new Date(body.dateOfFiling);
+
+            // Normalize date fields (store as UTC midnight where applicable)
+            const normalizeDate = (value?: string | Date | null): Date | undefined => {
+                if (!value) {
+                    return undefined;
                 }
+                if (typeof value === 'string') {
+                    if (!value) return undefined;
+                    return new Date(`${value}T00:00:00.000Z`);
+                }
+                return new Date(value);
+            };
+
+            body.dateOfFIR = normalizeDate(body.dateOfFIR) as Date;
+            body.dateOfFiling = body.dateOfFIR; // legacy compatibility
+
+            // Normalize dates in investigatingOfficers array
+            if (body.investigatingOfficers && Array.isArray(body.investigatingOfficers)) {
+                body.investigatingOfficers = body.investigatingOfficers.map(io => ({
+                    ...io,
+                    from: normalizeDate(io.from) || undefined,
+                    to: normalizeDate(io.to) || undefined,
+                }));
             }
+
+            // Legacy fields for compatibility (use first IO if available)
+            const firstIO = body.investigatingOfficers && body.investigatingOfficers.length > 0 
+                ? body.investigatingOfficers[0] 
+                : null;
+            if (firstIO) {
+                body.investigatingOfficer = firstIO.name;
+                body.investigatingOfficerRank = firstIO.rank;
+                body.investigatingOfficerPosting = firstIO.posting;
+                body.investigatingOfficerContact = firstIO.contact;
+                body.investigatingOfficerFrom = firstIO.from || undefined;
+                body.investigatingOfficerTo = firstIO.to || undefined;
+            }
+
+            body.branch = body.branchName;
+            body.sections = body.sections && body.sections.length > 0 ? body.sections : [body.underSection].filter(Boolean);
+            // Handle writSubType: set to undefined (not null) when writType is not BAIL
+            if (body.writType !== 'BAIL') {
+                body.writSubType = undefined;
+            } else if (body.writSubType === null) {
+                // Convert null to undefined for Mongoose compatibility
+                body.writSubType = undefined;
+            }
+            if (body.writType !== 'ANY_OTHER') {
+                body.writTypeOther = undefined;
+            }
+
+            // title/description removed - using petitionerPrayer instead
 
             // Set email from token
             body.email = email;
             const fir: IFIRModel = await FIRModel.create(body);
 
-            // Create initial proceeding for this FIR with sequence number 1
-            try {
-                const initialProceeding: Partial<IProceedingModel> = {
-                    fir: fir._id,
-                    sequence: 1, // Explicitly set to 1 for the first proceeding of this FIR
-                    type: 'NOTICE_OF_MOTION',
-                    summary: `FIR Registration - ${fir.firNumber}`,
-                    details: `FIR #${fir.firNumber} registered on ${fir.dateOfFiling.toISOString().split('T')[0]}. Investigating Officer: ${fir.investigatingOfficer} (${fir.investigatingOfficerRank})`,
-                    hearingDetails: {
-                        dateOfHearing: fir.dateOfFiling, // Use FIR filing date as initial hearing date
-                        judgeName: 'To be assigned', // Placeholder until actual judge is assigned
-                        courtNumber: 'To be assigned', // Placeholder until actual court is assigned
-                    },
-                    noticeOfMotion: {
-                        attendanceMode: 'BY_FORMAT', // Default attendance mode
-                        formatSubmitted: false, // Required when attendanceMode is BY_FORMAT
-                        formatFilledBy: {
-                            name: fir.investigatingOfficer,
-                            rank: fir.investigatingOfficerRank,
-                            mobile: String(fir.investigatingOfficerContact),
-                        },
-                    },
-                    createdBy: new Types.ObjectId(), // Placeholder ObjectId - in production, this should be the actual officer ID
-                    email: email, // Set email from token
-                };
-
-                await ProceedingModel.create(initialProceeding);
-            } catch (proceedingError) {
-                // Log error but don't fail FIR creation if proceeding creation fails
-                console.error('Failed to create initial proceeding for FIR:', fir._id, proceedingError);
-            }
+            // No longer creating initial proceeding automatically
+            // User will manually create proceeding in Step 2 of the form
 
             return fir;
         } catch (error) {
@@ -176,11 +190,11 @@ const FIRService: IFIRService = {
     },
     async cityGraph(email: string): Promise<any> {
         try {
-            return await FIRModel.aggregate([
+                return await FIRModel.aggregate([
                 { $match: { email } }, // Filter by user email
                 {
                     $group: {
-                        _id: "$branch",
+                        _id: { $ifNull: ['$branchName', '$branch'] },
                         count: { $sum: 1 }
                     }
                 },
@@ -201,7 +215,7 @@ const FIRService: IFIRService = {
     async search(query: string, email: string): Promise<IFIRModel[]> {
         try {
             if (!query || query.trim() === '') {
-                return await FIRModel.find({ email }).limit(100).sort({ dateOfFiling: -1 });
+                return await FIRModel.find({ email }).limit(100).sort({ dateOfFIR: -1, createdAt: -1 });
             }
 
             const searchRegex = new RegExp(query.trim(), 'i');
@@ -210,11 +224,15 @@ const FIRService: IFIRService = {
                 $or: [
                     { firNumber: searchRegex },
                     { petitionerName: searchRegex },
-                    { title: searchRegex },
-                    { investigatingOfficer: searchRegex },
+                    // { title: searchRegex }, // Commented out - using petitionerPrayer instead
+                    { investigatingOfficer: searchRegex }, // Legacy field
+                    { 'investigatingOfficers.name': searchRegex }, // New array field
                     { branch: searchRegex },
+                    { branchName: searchRegex },
+                    { policeStation: searchRegex },
+                    { writNumber: searchRegex },
                 ],
-            }).limit(50).sort({ dateOfFiling: -1 });
+            }).limit(50).sort({ dateOfFIR: -1, createdAt: -1 });
         } catch (error) {
             throw new Error(error.message);
         }

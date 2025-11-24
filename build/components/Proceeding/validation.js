@@ -84,7 +84,12 @@ class ProceedingValidation extends validation_1.default {
             type: Joi.string().valid('NOTICE_OF_MOTION', 'TO_FILE_REPLY', 'ARGUMENT', 'DECISION').required(),
             summary: Joi.string().trim().allow('', null),
             details: Joi.string().trim().allow('', null),
-            hearingDetails: hearingDetailsSchema.required(),
+            hearingDetails: Joi.when('draft', {
+                is: true,
+                then: hearingDetailsSchema.allow(null),
+                otherwise: hearingDetailsSchema.required(),
+            }),
+            draft: Joi.boolean().default(false),
             noticeOfMotion: Joi.when('type', {
                 is: Joi.string().valid('NOTICE_OF_MOTION', 'TO_FILE_REPLY'),
                 then: noticeOfMotionSchema.allow(null),

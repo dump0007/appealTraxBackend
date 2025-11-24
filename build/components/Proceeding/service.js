@@ -16,7 +16,8 @@ const ProceedingService = {
     findAll(email) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                return yield model_1.default.find({ email })
+                // Only return non-draft proceedings
+                return yield model_1.default.find({ email, draft: false })
                     .sort({ fir: 1, sequence: 1 })
                     .populate('fir')
                     .populate('createdBy');
@@ -39,7 +40,8 @@ const ProceedingService = {
                 if (!fir) {
                     throw new Error('FIR not found or access denied');
                 }
-                return yield model_1.default.find({ fir: new mongoose_1.Types.ObjectId(firId), email })
+                // Only return non-draft proceedings
+                return yield model_1.default.find({ fir: new mongoose_1.Types.ObjectId(firId), email, draft: false })
                     .sort({ sequence: 1 })
                     .populate('fir')
                     .populate('createdBy');
@@ -63,6 +65,28 @@ const ProceedingService = {
                     throw new Error('Proceeding not found or access denied');
                 }
                 return proceeding;
+            }
+            catch (error) {
+                throw new Error(error.message);
+            }
+        });
+    },
+    findDraftByFIR(firId, email) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const validate = validation_1.default.byFIR({ firId });
+                if (validate.error) {
+                    throw new Error(validate.error.message);
+                }
+                // Verify the FIR belongs to this user
+                const FIRModel = (yield Promise.resolve().then(() => require('../FIR/model'))).default;
+                const fir = yield FIRModel.findOne({ _id: new mongoose_1.Types.ObjectId(firId), email });
+                if (!fir) {
+                    throw new Error('FIR not found or access denied');
+                }
+                return yield model_1.default.findOne({ fir: new mongoose_1.Types.ObjectId(firId), email, draft: true })
+                    .populate('fir')
+                    .populate('createdBy');
             }
             catch (error) {
                 throw new Error(error.message);
@@ -143,6 +167,23 @@ const ProceedingService = {
                 }
                 // Set email from token
                 body.email = email;
+                // If this is a draft, check if a draft already exists for this FIR
+                if (body.draft) {
+                    const existingDraft = yield model_1.default.findOne({ fir: body.fir, email, draft: true });
+                    if (existingDraft) {
+                        // Update existing draft
+                        Object.assign(existingDraft, body);
+                        yield existingDraft.save();
+                        return existingDraft;
+                    }
+                }
+                else {
+                    // If finalizing a draft, delete any existing draft and create final proceeding
+                    yield model_1.default.deleteOne({ fir: body.fir, email, draft: true });
+                    // Set proper sequence for final proceeding
+                    const last = yield model_1.default.findOne({ fir: body.fir, draft: false }).sort({ sequence: -1 }).select('sequence').lean();
+                    body.sequence = last && typeof last.sequence === 'number' ? last.sequence + 1 : 1;
+                }
                 return yield model_1.default.create(body);
             }
             catch (error) {

@@ -66,6 +66,7 @@ export interface IProceedingModel extends Document {
     decisionDetails?: IDecisionDetails;
     createdBy: Types.ObjectId; // Officer ref
     email: string; // User email who created this proceeding
+    draft: boolean; // Whether this is a draft proceeding
     attachments: {
         fileName: string;
         fileUrl: string;
@@ -143,6 +144,7 @@ const ProceedingSchema: Schema<IProceedingModel> = new Schema({
     decisionDetails: DecisionDetailsSubSchema,
     createdBy: { type: Schema.Types.ObjectId, ref: 'UserModel', required: true, index: true },
     email: { type: String, required: true, trim: true, index: true },
+    draft: { type: Boolean, default: false, index: true },
     attachments: { type: [AttachmentSubSchema], default: [] },
 }, {
     collection: 'proceeding',
@@ -154,14 +156,19 @@ ProceedingSchema.index({ fir: 1, createdAt: -1 });
 ProceedingSchema.index({ fir: 1, sequence: 1 }, { unique: true });
 ProceedingSchema.index({ email: 1, createdAt: -1 });
 
-// Auto-increment sequence per FIR
+// Auto-increment sequence per FIR (only for non-draft proceedings)
 ProceedingSchema.pre('validate', async function (next) {
     const doc = this as unknown as IProceedingModel & { isNew: boolean };
     try {
         if (doc.isNew && (doc.sequence === undefined || doc.sequence === null)) {
-            // Find the last sequence for this FIR
-            const last = await (this as any).constructor.findOne({ fir: doc.fir }).sort({ sequence: -1 }).select('sequence').lean();
-            doc.sequence = last && typeof last.sequence === 'number' ? last.sequence + 1 : 1;
+            // For drafts, use sequence 0 (temporary), for final proceedings, find last non-draft sequence
+            if (doc.draft) {
+                doc.sequence = 0; // Drafts use sequence 0
+            } else {
+                // Find the last non-draft sequence for this FIR
+                const last = await (this as any).constructor.findOne({ fir: doc.fir, draft: false }).sort({ sequence: -1 }).select('sequence').lean();
+                doc.sequence = last && typeof last.sequence === 'number' ? last.sequence + 1 : 1;
+            }
         }
         next();
     } catch (err) {

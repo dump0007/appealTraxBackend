@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.remove = exports.create = exports.findOne = exports.findByFIR = exports.findAll = void 0;
+exports.remove = exports.findDraftByFIR = exports.create = exports.findOne = exports.findByFIR = exports.findAll = void 0;
 const mongoose_1 = require("mongoose");
 const service_1 = require("./service");
 const error_1 = require("../../config/error");
@@ -98,6 +98,23 @@ function create(req, res, next) {
     });
 }
 exports.create = create;
+function findDraftByFIR(req, res, next) {
+    var _a;
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const email = req.email || ((_a = req.user) === null || _a === void 0 ? void 0 : _a.email);
+            if (!email) {
+                return next(new error_1.HttpError(401, 'User email not found in token'));
+            }
+            const item = yield service_1.default.findDraftByFIR(req.params.firId, email);
+            res.status(200).json(item);
+        }
+        catch (error) {
+            next(new error_1.HttpError(error.status || 500, error.message || 'Internal Server Error'));
+        }
+    });
+}
+exports.findDraftByFIR = findDraftByFIR;
 function remove(req, res, next) {
     var _a;
     return __awaiter(this, void 0, void 0, function* () {

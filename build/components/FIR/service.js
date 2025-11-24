@@ -12,7 +12,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = require("mongoose");
 const model_1 = require("./model");
 const validation_1 = require("./validation");
-const model_2 = require("../Proceeding/model");
 const FIRService = {
     findAll(email) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -64,49 +63,55 @@ const FIRService = {
                 if (validate.error) {
                     throw new Error(validate.error.message);
                 }
-                // Normalize dateOfFiling to avoid timezone shifts (store as UTC midnight)
-                if (body.dateOfFiling) {
-                    if (typeof body.dateOfFiling === 'string') {
-                        body.dateOfFiling = new Date(`${body.dateOfFiling}T00:00:00.000Z`);
+                // Normalize date fields (store as UTC midnight where applicable)
+                const normalizeDate = (value) => {
+                    if (!value) {
+                        return undefined;
                     }
-                    else {
-                        body.dateOfFiling = new Date(body.dateOfFiling);
+                    if (typeof value === 'string') {
+                        if (!value)
+                            return undefined;
+                        return new Date(`${value}T00:00:00.000Z`);
                     }
+                    return new Date(value);
+                };
+                body.dateOfFIR = normalizeDate(body.dateOfFIR);
+                body.dateOfFiling = body.dateOfFIR; // legacy compatibility
+                // Normalize dates in investigatingOfficers array
+                if (body.investigatingOfficers && Array.isArray(body.investigatingOfficers)) {
+                    body.investigatingOfficers = body.investigatingOfficers.map(io => (Object.assign(Object.assign({}, io), { from: normalizeDate(io.from) || undefined, to: normalizeDate(io.to) || undefined })));
                 }
+                // Legacy fields for compatibility (use first IO if available)
+                const firstIO = body.investigatingOfficers && body.investigatingOfficers.length > 0
+                    ? body.investigatingOfficers[0]
+                    : null;
+                if (firstIO) {
+                    body.investigatingOfficer = firstIO.name;
+                    body.investigatingOfficerRank = firstIO.rank;
+                    body.investigatingOfficerPosting = firstIO.posting;
+                    body.investigatingOfficerContact = firstIO.contact;
+                    body.investigatingOfficerFrom = firstIO.from || undefined;
+                    body.investigatingOfficerTo = firstIO.to || undefined;
+                }
+                body.branch = body.branchName;
+                body.sections = body.sections && body.sections.length > 0 ? body.sections : [body.underSection].filter(Boolean);
+                // Handle writSubType: set to undefined (not null) when writType is not BAIL
+                if (body.writType !== 'BAIL') {
+                    body.writSubType = undefined;
+                }
+                else if (body.writSubType === null) {
+                    // Convert null to undefined for Mongoose compatibility
+                    body.writSubType = undefined;
+                }
+                if (body.writType !== 'ANY_OTHER') {
+                    body.writTypeOther = undefined;
+                }
+                // title/description removed - using petitionerPrayer instead
                 // Set email from token
                 body.email = email;
                 const fir = yield model_1.default.create(body);
-                // Create initial proceeding for this FIR with sequence number 1
-                try {
-                    const initialProceeding = {
-                        fir: fir._id,
-                        sequence: 1,
-                        type: 'NOTICE_OF_MOTION',
-                        summary: `FIR Registration - ${fir.firNumber}`,
-                        details: `FIR #${fir.firNumber} registered on ${fir.dateOfFiling.toISOString().split('T')[0]}. Investigating Officer: ${fir.investigatingOfficer} (${fir.investigatingOfficerRank})`,
-                        hearingDetails: {
-                            dateOfHearing: fir.dateOfFiling,
-                            judgeName: 'To be assigned',
-                            courtNumber: 'To be assigned', // Placeholder until actual court is assigned
-                        },
-                        noticeOfMotion: {
-                            attendanceMode: 'BY_FORMAT',
-                            formatSubmitted: false,
-                            formatFilledBy: {
-                                name: fir.investigatingOfficer,
-                                rank: fir.investigatingOfficerRank,
-                                mobile: String(fir.investigatingOfficerContact),
-                            },
-                        },
-                        createdBy: new mongoose_1.Types.ObjectId(),
-                        email: email, // Set email from token
-                    };
-                    yield model_2.default.create(initialProceeding);
-                }
-                catch (proceedingError) {
-                    // Log error but don't fail FIR creation if proceeding creation fails
-                    console.error('Failed to create initial proceeding for FIR:', fir._id, proceedingError);
-                }
+                // No longer creating initial proceeding automatically
+                // User will manually create proceeding in Step 2 of the form
                 return fir;
             }
             catch (error) {
@@ -195,7 +200,7 @@ const FIRService = {
                     { $match: { email } },
                     {
                         $group: {
-                            _id: "$branch",
+                            _id: { $ifNull: ['$branchName', '$branch'] },
                             count: { $sum: 1 }
                         }
                     },
@@ -218,7 +223,7 @@ const FIRService = {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 if (!query || query.trim() === '') {
-                    return yield model_1.default.find({ email }).limit(100).sort({ dateOfFiling: -1 });
+                    return yield model_1.default.find({ email }).limit(100).sort({ dateOfFIR: -1, createdAt: -1 });
                 }
                 const searchRegex = new RegExp(query.trim(), 'i');
                 return yield model_1.default.find({
@@ -226,11 +231,15 @@ const FIRService = {
                     $or: [
                         { firNumber: searchRegex },
                         { petitionerName: searchRegex },
-                        { title: searchRegex },
+                        // { title: searchRegex }, // Commented out - using petitionerPrayer instead
                         { investigatingOfficer: searchRegex },
+                        { 'investigatingOfficers.name': searchRegex },
                         { branch: searchRegex },
+                        { branchName: searchRegex },
+                        { policeStation: searchRegex },
+                        { writNumber: searchRegex },
                     ],
-                }).limit(50).sort({ dateOfFiling: -1 });
+                }).limit(50).sort({ dateOfFIR: -1, createdAt: -1 });
             }
             catch (error) {
                 throw new Error(error.message);
