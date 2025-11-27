@@ -31,13 +31,13 @@ const NoticeOfMotionSubSchema = new mongoose_1.Schema({
     formatFilledBy: PersonSubSchema,
     appearingAG: PersonSubSchema,
     attendingOfficer: PersonSubSchema,
+    investigatingOfficer: PersonSubSchema,
     nextDateOfHearing: { type: Date },
     officerDeputedForReply: { type: String, trim: true },
     vettingOfficerDetails: { type: String, trim: true },
     replyFiled: { type: Boolean },
     replyFilingDate: { type: Date },
     advocateGeneralName: { type: String, trim: true },
-    investigatingOfficerName: { type: String, trim: true },
     replyScrutinizedByHC: { type: Boolean },
 }, { _id: false });
 const ReplyTrackingSubSchema = new mongoose_1.Schema({
@@ -47,6 +47,7 @@ const ReplyTrackingSubSchema = new mongoose_1.Schema({
     nextDateOfHearing: { type: Date },
 }, { _id: false });
 const ArgumentDetailsSubSchema = new mongoose_1.Schema({
+    details: { type: String, trim: true },
     nextDateOfHearing: { type: Date },
 }, { _id: false });
 const DecisionDetailsSubSchema = new mongoose_1.Schema({

@@ -129,6 +129,11 @@ const ProceedingService = {
                                 notice.attendingOfficer = undefined;
                             }
                         }
+                        if (notice.investigatingOfficer) {
+                            if (!notice.investigatingOfficer.name || notice.investigatingOfficer.name.trim() === '') {
+                                notice.investigatingOfficer = undefined;
+                            }
+                        }
                         return notice;
                     };
                     if (Array.isArray(body.noticeOfMotion)) {
@@ -151,6 +156,9 @@ const ProceedingService = {
                     if (nextDate === null || nextDate === undefined ||
                         (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
                         body.argumentDetails.nextDateOfHearing = undefined;
+                    }
+                    if (body.argumentDetails.details && typeof body.argumentDetails.details === 'string') {
+                        body.argumentDetails.details = body.argumentDetails.details.trim();
                     }
                 }
                 if (body.decisionDetails) {

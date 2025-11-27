@@ -23,13 +23,13 @@ export interface INoticeOfMotionDetails {
     formatFilledBy?: IPersonDetails;
     appearingAG?: IPersonDetails;
     attendingOfficer?: IPersonDetails;
+    investigatingOfficer?: IPersonDetails;
     nextDateOfHearing?: Date;
     officerDeputedForReply?: string;
     vettingOfficerDetails?: string;
     replyFiled?: boolean;
     replyFilingDate?: Date;
     advocateGeneralName?: string;
-    investigatingOfficerName?: string;
     replyScrutinizedByHC?: boolean;
 }
 
@@ -41,6 +41,7 @@ export interface IReplyTrackingDetails {
 }
 
 export interface IArgumentDetails {
+    details?: string;
     nextDateOfHearing?: Date;
 }
 
@@ -99,13 +100,13 @@ const NoticeOfMotionSubSchema = new Schema({
     formatFilledBy: PersonSubSchema,
     appearingAG: PersonSubSchema,
     attendingOfficer: PersonSubSchema,
+    investigatingOfficer: PersonSubSchema,
     nextDateOfHearing: { type: Date },
     officerDeputedForReply: { type: String, trim: true },
     vettingOfficerDetails: { type: String, trim: true },
     replyFiled: { type: Boolean },
     replyFilingDate: { type: Date },
     advocateGeneralName: { type: String, trim: true },
-    investigatingOfficerName: { type: String, trim: true },
     replyScrutinizedByHC: { type: Boolean },
 }, { _id: false });
 
@@ -117,6 +118,7 @@ const ReplyTrackingSubSchema = new Schema({
 }, { _id: false });
 
 const ArgumentDetailsSubSchema = new Schema({
+    details: { type: String, trim: true },
     nextDateOfHearing: { type: Date },
 }, { _id: false });
 

@@ -19,17 +19,39 @@ class ProceedingValidation extends validation_1.default {
         }).allow(null);
         const hearingDetailsSchema = Joi.object({
             dateOfHearing: Joi.date().required(),
-            judgeName: Joi.string().trim().allow('', null).default(''),
-            courtNumber: Joi.string().trim().allow('', null).default(''),
+            judgeName: Joi.string().trim().required(),
+            courtNumber: Joi.string().trim().required(),
         });
         const noticeOfMotionSchema = Joi.object({
             attendanceMode: Joi.string().valid('BY_FORMAT', 'BY_PERSON').allow(null, ''),
-            formatSubmitted: Joi.boolean().allow(null),
+            formatSubmitted: Joi.when('attendanceMode', {
+                is: 'BY_FORMAT',
+                then: Joi.boolean().required(),
+                otherwise: Joi.boolean().allow(null),
+            }),
             // formatFilledBy is only required when attendanceMode is BY_FORMAT
-            formatFilledBy: personSchemaOptional,
-            // appearingAG and attendingOfficer are only required when attendanceMode is BY_PERSON
-            appearingAG: personSchemaOptional,
-            attendingOfficer: personSchemaOptional,
+            formatFilledBy: Joi.when('attendanceMode', {
+                is: 'BY_FORMAT',
+                then: personSchema.required(),
+                otherwise: personSchemaOptional,
+            }),
+            // appearingAG is required for both modes
+            appearingAG: Joi.when('attendanceMode', {
+                is: Joi.string().valid('BY_FORMAT', 'BY_PERSON'),
+                then: personSchema.required(),
+                otherwise: personSchemaOptional,
+            }),
+            // attendingOfficer and investigatingOfficer are required when attendanceMode is BY_PERSON
+            attendingOfficer: Joi.when('attendanceMode', {
+                is: 'BY_PERSON',
+                then: personSchema.required(),
+                otherwise: personSchemaOptional,
+            }),
+            investigatingOfficer: Joi.when('attendanceMode', {
+                is: 'BY_PERSON',
+                then: personSchema.required(),
+                otherwise: personSchemaOptional,
+            }),
             nextDateOfHearing: Joi.alternatives().try(Joi.date().allow(null), Joi.string().allow('', null).custom((value, helpers) => {
                 if (!value || value === '')
                     return null;
@@ -46,7 +68,6 @@ class ProceedingValidation extends validation_1.default {
                 return isNaN(date.getTime()) ? helpers.error('date.invalid') : date;
             })),
             advocateGeneralName: Joi.string().trim().allow('', null),
-            investigatingOfficerName: Joi.string().trim().allow('', null),
             replyScrutinizedByHC: Joi.boolean().allow(null),
         }).unknown(false);
         const replyTrackingSchema = Joi.object({
@@ -61,12 +82,14 @@ class ProceedingValidation extends validation_1.default {
             })),
         }).unknown(false);
         const argumentDetailsSchema = Joi.object({
-            nextDateOfHearing: Joi.alternatives().try(Joi.date().allow(null), Joi.string().allow('', null).custom((value, helpers) => {
-                if (!value || value === '')
-                    return null;
+            details: Joi.string().trim().required(),
+            nextDateOfHearing: Joi.alternatives().try(Joi.date(), Joi.string().trim().custom((value, helpers) => {
+                if (!value || value === '') {
+                    return helpers.error('any.required');
+                }
                 const date = new Date(value);
                 return isNaN(date.getTime()) ? helpers.error('date.invalid') : date;
-            })),
+            })).required(),
         }).unknown(false);
         const decisionDetailsSchema = Joi.object({
             writStatus: Joi.string().valid('ALLOWED', 'PENDING', 'DISMISSED', 'WITHDRAWN', 'DIRECTION').required(),
