@@ -9,6 +9,7 @@ import UserRouter from './UserRouter';
 
 import FIRRouter from './FIRRouter';
 import ProceedingRouter from './ProceedingRouter';
+import { getProceedingFilePath } from '../config/middleware/fileUpload';
 
 const swaggerDef = require('../../swaggerDef');
 
@@ -48,6 +49,20 @@ export function init(app: express.Application): void {
      * @constructs
      */
     app.use('/auth', AuthRouter);
+
+    /**
+     * @description Serve uploaded proceeding files
+     * @constructs
+     */
+    app.get('/assets/proceedings/:filename', jwtConfig.isAuthenticated, (req: express.Request, res: express.Response) => {
+        try {
+            const filename = req.params.filename;
+            const filepath = getProceedingFilePath(filename);
+            res.sendFile(filepath);
+        } catch (error) {
+            res.status(404).send('File not found');
+        }
+    });
 
     /**
      * @description

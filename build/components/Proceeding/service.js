@@ -97,33 +97,45 @@ const ProceedingService = {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 // Clean up empty date strings and empty objects before validation
+                // Handle both single object and array of noticeOfMotion
                 if (body.noticeOfMotion) {
-                    // Clean up empty date strings (handle both Date and string types)
-                    const nextDate = body.noticeOfMotion.nextDateOfHearing;
-                    if (nextDate === null || nextDate === undefined ||
-                        (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
-                        body.noticeOfMotion.nextDateOfHearing = undefined;
-                    }
-                    const replyDate = body.noticeOfMotion.replyFilingDate;
-                    if (replyDate === null || replyDate === undefined ||
-                        (typeof replyDate === 'string' && String(replyDate).trim() === '')) {
-                        body.noticeOfMotion.replyFilingDate = undefined;
-                    }
-                    // Clean up empty person objects (if name is empty or missing)
-                    if (body.noticeOfMotion.formatFilledBy) {
-                        if (!body.noticeOfMotion.formatFilledBy.name || body.noticeOfMotion.formatFilledBy.name.trim() === '') {
-                            body.noticeOfMotion.formatFilledBy = undefined;
+                    const cleanNoticeOfMotion = (notice) => {
+                        if (!notice)
+                            return notice;
+                        // Clean up empty date strings (handle both Date and string types)
+                        const nextDate = notice.nextDateOfHearing;
+                        if (nextDate === null || nextDate === undefined ||
+                            (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
+                            notice.nextDateOfHearing = undefined;
                         }
-                    }
-                    if (body.noticeOfMotion.appearingAG) {
-                        if (!body.noticeOfMotion.appearingAG.name || body.noticeOfMotion.appearingAG.name.trim() === '') {
-                            body.noticeOfMotion.appearingAG = undefined;
+                        const replyDate = notice.replyFilingDate;
+                        if (replyDate === null || replyDate === undefined ||
+                            (typeof replyDate === 'string' && String(replyDate).trim() === '')) {
+                            notice.replyFilingDate = undefined;
                         }
-                    }
-                    if (body.noticeOfMotion.attendingOfficer) {
-                        if (!body.noticeOfMotion.attendingOfficer.name || body.noticeOfMotion.attendingOfficer.name.trim() === '') {
-                            body.noticeOfMotion.attendingOfficer = undefined;
+                        // Clean up empty person objects (if name is empty or missing)
+                        if (notice.formatFilledBy) {
+                            if (!notice.formatFilledBy.name || notice.formatFilledBy.name.trim() === '') {
+                                notice.formatFilledBy = undefined;
+                            }
                         }
+                        if (notice.appearingAG) {
+                            if (!notice.appearingAG.name || notice.appearingAG.name.trim() === '') {
+                                notice.appearingAG = undefined;
+                            }
+                        }
+                        if (notice.attendingOfficer) {
+                            if (!notice.attendingOfficer.name || notice.attendingOfficer.name.trim() === '') {
+                                notice.attendingOfficer = undefined;
+                            }
+                        }
+                        return notice;
+                    };
+                    if (Array.isArray(body.noticeOfMotion)) {
+                        body.noticeOfMotion = body.noticeOfMotion.map(cleanNoticeOfMotion);
+                    }
+                    else {
+                        body.noticeOfMotion = cleanNoticeOfMotion(body.noticeOfMotion);
                     }
                 }
                 // Clean up dates in other sections

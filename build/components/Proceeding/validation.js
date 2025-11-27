@@ -92,9 +92,10 @@ class ProceedingValidation extends validation_1.default {
             draft: Joi.boolean().default(false),
             noticeOfMotion: Joi.when('type', {
                 is: Joi.string().valid('NOTICE_OF_MOTION', 'TO_FILE_REPLY'),
-                then: noticeOfMotionSchema.allow(null),
+                then: Joi.alternatives().try(noticeOfMotionSchema, Joi.array().items(noticeOfMotionSchema).min(1)).allow(null),
                 otherwise: Joi.optional().allow(null),
             }),
+            orderOfProceedingFilename: Joi.string().trim().allow('', null),
             replyTracking: Joi.when('type', {
                 is: 'TO_FILE_REPLY',
                 then: replyTrackingSchema.allow(null),

@@ -3,9 +3,18 @@ import * as compression from 'compression';
 import * as cookieParser from 'cookie-parser';
 import * as cors from 'cors';
 import * as express from 'express';
+import * as expressFileUpload from 'express-fileupload';
 import * as helmet from 'helmet';
+import * as path from 'path';
+import * as fs from 'fs';
 import { HttpError } from '../error/index';
 import { sendHttpErrorModule } from '../error/sendHttpError';
+
+// Ensure assets/proceedings directory exists
+const uploadsDir = path.join(process.cwd(), 'assets', 'proceedings');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 /**
  * @export
@@ -25,6 +34,12 @@ export function configure(app: express.Application): void {
     app.use(helmet());
     // providing a Connect/Express middleware that can be used to enable CORS with various options
     app.use(cors());
+    // file upload middleware
+    app.use(expressFileUpload({
+        limits: { fileSize: 250 * 1024 }, // 250 KB
+        abortOnLimit: true,
+        createParentPath: true,
+    }));
 
     // custom errors
     app.use(sendHttpErrorModule);

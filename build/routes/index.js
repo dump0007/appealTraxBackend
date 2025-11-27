@@ -11,6 +11,7 @@ const AuthRouter_1 = require("./AuthRouter");
 const UserRouter_1 = require("./UserRouter");
 const FIRRouter_1 = require("./FIRRouter");
 const ProceedingRouter_1 = require("./ProceedingRouter");
+const fileUpload_1 = require("../config/middleware/fileUpload");
 const swaggerDef = require('../../swaggerDef');
 /**
  * @export
@@ -44,6 +45,20 @@ function init(app) {
      * @constructs
      */
     app.use('/auth', AuthRouter_1.default);
+    /**
+     * @description Serve uploaded proceeding files
+     * @constructs
+     */
+    app.get('/assets/proceedings/:filename', jwtConfig.isAuthenticated, (req, res) => {
+        try {
+            const filename = req.params.filename;
+            const filepath = (0, fileUpload_1.getProceedingFilePath)(filename);
+            res.sendFile(filepath);
+        }
+        catch (error) {
+            res.status(404).send('File not found');
+        }
+    });
     /**
      * @description
      *  If swagger.json file exists in root folder, shows swagger api description

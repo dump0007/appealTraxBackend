@@ -67,7 +67,7 @@ const ProceedingSchema = new mongoose_1.Schema({
     summary: { type: String },
     details: { type: String },
     hearingDetails: HearingDetailsSubSchema,
-    noticeOfMotion: NoticeOfMotionSubSchema,
+    noticeOfMotion: mongoose_1.Schema.Types.Mixed,
     replyTracking: ReplyTrackingSubSchema,
     argumentDetails: ArgumentDetailsSubSchema,
     decisionDetails: DecisionDetailsSubSchema,
@@ -75,6 +75,7 @@ const ProceedingSchema = new mongoose_1.Schema({
     email: { type: String, required: true, trim: true, index: true },
     draft: { type: Boolean, default: false, index: true },
     attachments: { type: [AttachmentSubSchema], default: [] },
+    orderOfProceedingFilename: { type: String, trim: true },
 }, {
     collection: 'proceeding',
     versionKey: false,

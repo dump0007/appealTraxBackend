@@ -5,9 +5,17 @@ const bodyParser = require("body-parser");
 const compression = require("compression");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
+const expressFileUpload = require("express-fileupload");
 const helmet = require("helmet");
+const path = require("path");
+const fs = require("fs");
 const index_1 = require("../error/index");
 const sendHttpError_1 = require("../error/sendHttpError");
+// Ensure assets/proceedings directory exists
+const uploadsDir = path.join(process.cwd(), 'assets', 'proceedings');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
 /**
  * @export
  * @param {express.Application} app
@@ -26,6 +34,12 @@ function configure(app) {
     app.use(helmet());
     // providing a Connect/Express middleware that can be used to enable CORS with various options
     app.use(cors());
+    // file upload middleware
+    app.use(expressFileUpload({
+        limits: { fileSize: 250 * 1024 },
+        abortOnLimit: true,
+        createParentPath: true,
+    }));
     // custom errors
     app.use(sendHttpError_1.sendHttpErrorModule);
     // cors

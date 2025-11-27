@@ -60,7 +60,7 @@ export interface IProceedingModel extends Document {
     summary?: string;
     details?: string;
     hearingDetails?: IHearingDetails;
-    noticeOfMotion?: INoticeOfMotionDetails;
+    noticeOfMotion?: INoticeOfMotionDetails | INoticeOfMotionDetails[]; // Support both single and array
     replyTracking?: IReplyTrackingDetails;
     argumentDetails?: IArgumentDetails;
     decisionDetails?: IDecisionDetails;
@@ -71,6 +71,7 @@ export interface IProceedingModel extends Document {
         fileName: string;
         fileUrl: string;
     }[];
+    orderOfProceedingFilename?: string; // Filename of uploaded order of proceeding
     createdAt: Date;
     updatedAt: Date;
 }
@@ -138,7 +139,7 @@ const ProceedingSchema: Schema<IProceedingModel> = new Schema({
     summary: { type: String },
     details: { type: String },
     hearingDetails: HearingDetailsSubSchema,
-    noticeOfMotion: NoticeOfMotionSubSchema,
+    noticeOfMotion: Schema.Types.Mixed, // Support both single object and array
     replyTracking: ReplyTrackingSubSchema,
     argumentDetails: ArgumentDetailsSubSchema,
     decisionDetails: DecisionDetailsSubSchema,
@@ -146,6 +147,7 @@ const ProceedingSchema: Schema<IProceedingModel> = new Schema({
     email: { type: String, required: true, trim: true, index: true },
     draft: { type: Boolean, default: false, index: true },
     attachments: { type: [AttachmentSubSchema], default: [] },
+    orderOfProceedingFilename: { type: String, trim: true },
 }, {
     collection: 'proceeding',
     versionKey: false,
