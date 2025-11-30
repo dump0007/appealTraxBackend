@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.search = exports.cityGraph = exports.dashboard = exports.remove = exports.create = exports.findOne = exports.findAll = void 0;
+exports.search = exports.cityGraph = exports.dashboard = exports.remove = exports.update = exports.create = exports.findOne = exports.findAll = void 0;
 const service_1 = require("./service");
 const error_1 = require("../../config/error");
 function findAll(req, res, next) {
@@ -63,6 +63,23 @@ function create(req, res, next) {
     });
 }
 exports.create = create;
+function update(req, res, next) {
+    var _a;
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const email = req.email || ((_a = req.user) === null || _a === void 0 ? void 0 : _a.email);
+            if (!email) {
+                return next(new error_1.HttpError(401, 'User email not found in token'));
+            }
+            const fir = yield service_1.default.update(req.params.id, req.body, email);
+            res.status(200).json(fir);
+        }
+        catch (error) {
+            next(new error_1.HttpError(error.status || 500, error.message || 'Internal Server Error'));
+        }
+    });
+}
+exports.update = update;
 function remove(req, res, next) {
     var _a;
     return __awaiter(this, void 0, void 0, function* () {

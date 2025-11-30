@@ -21,7 +21,7 @@ export type BailSubType = 'ANTICIPATORY' | 'REGULAR';
 
 export interface IRespondentDetail {
     name: string;
-    designation: string;
+    designation?: string;
 }
 
 export interface IInvestigatingOfficerDetail {
@@ -72,7 +72,7 @@ export interface IFIRModel extends Document {
 
 const RespondentSchema = new Schema<IRespondentDetail>({
     name: { type: String, required: true, trim: true },
-    designation: { type: String, required: true, trim: true },
+    designation: { type: String, required: false, trim: true },
 }, { _id: false });
 
 const InvestigatingOfficerSchema = new Schema<IInvestigatingOfficerDetail>({

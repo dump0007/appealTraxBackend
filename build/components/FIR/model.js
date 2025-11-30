@@ -4,7 +4,7 @@ const mongoose_1 = require("mongoose");
 const connections = require("../../config/connection/connection");
 const RespondentSchema = new mongoose_1.Schema({
     name: { type: String, required: true, trim: true },
-    designation: { type: String, required: true, trim: true },
+    designation: { type: String, required: false, trim: true },
 }, { _id: false });
 const InvestigatingOfficerSchema = new mongoose_1.Schema({
     name: { type: String, required: true, trim: true },

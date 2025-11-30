@@ -11,7 +11,7 @@ class FIRValidation extends validation_1.default {
         const BAIL_SUB_TYPES = ['ANTICIPATORY', 'REGULAR'];
         const respondentSchema = Joi.object({
             name: Joi.string().trim().required(),
-            designation: Joi.string().trim().required(),
+            designation: Joi.string().trim().allow('', null).optional(),
         });
         const investigatingOfficerSchema = Joi.object({
             name: Joi.string().trim().required(),
@@ -41,11 +41,7 @@ class FIRValidation extends validation_1.default {
                 then: Joi.string().valid(...BAIL_SUB_TYPES).required(),
                 otherwise: Joi.alternatives().try(Joi.string().valid(...BAIL_SUB_TYPES), Joi.valid(null, '')).allow(null, ''),
             }),
-            writTypeOther: Joi.when('writType', {
-                is: 'ANY_OTHER',
-                then: Joi.string().trim().required(),
-                otherwise: Joi.string().trim().allow('', null),
-            }),
+            writTypeOther: Joi.string().trim().allow('', null).optional(),
             underSection: Joi.string().trim().required(),
             act: Joi.string().trim().required(),
             policeStation: Joi.string().trim().required(),

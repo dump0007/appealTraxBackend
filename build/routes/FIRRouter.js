@@ -9,6 +9,7 @@ router.get('/dash', components_1.FIRComponent.dashboard);
 router.get('/graph', components_1.FIRComponent.cityGraph);
 router.post('/', components_1.FIRComponent.create);
 router.get('/:id', components_1.FIRComponent.findOne);
+router.put('/:id', components_1.FIRComponent.update);
 router.delete('/:id', components_1.FIRComponent.remove);
 exports.default = router;
 //# sourceMappingURL=FIRRouter.js.map

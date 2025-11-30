@@ -11,6 +11,7 @@ router.get('/graph', FIRComponent.cityGraph);
 router.post('/', FIRComponent.create);
 
 router.get('/:id', FIRComponent.findOne);
+router.put('/:id', FIRComponent.update);
 router.delete('/:id', FIRComponent.remove);
 
 export default router;

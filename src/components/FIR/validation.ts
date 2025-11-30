@@ -13,7 +13,7 @@ class FIRValidation extends Validation {
 
         const respondentSchema = Joi.object({
             name: Joi.string().trim().required(),
-            designation: Joi.string().trim().required(),
+            designation: Joi.string().trim().allow('', null).optional(),
         });
 
         const investigatingOfficerSchema = Joi.object({
@@ -48,11 +48,7 @@ class FIRValidation extends Validation {
                     Joi.valid(null, '')
                 ).allow(null, ''),
             }),
-            writTypeOther: Joi.when('writType', {
-                is: 'ANY_OTHER',
-                then: Joi.string().trim().required(),
-                otherwise: Joi.string().trim().allow('', null),
-            }),
+            writTypeOther: Joi.string().trim().allow('', null).optional(),
             underSection: Joi.string().trim().required(),
             act: Joi.string().trim().required(),
             policeStation: Joi.string().trim().required(),

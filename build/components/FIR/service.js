@@ -119,6 +119,73 @@ const FIRService = {
             }
         });
     },
+    update(id, body, email) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const validate = validation_1.default.byId({ id });
+                if (validate.error) {
+                    throw new Error(validate.error.message);
+                }
+                const updateValidate = validation_1.default.create(body);
+                if (updateValidate.error) {
+                    throw new Error(updateValidate.error.message);
+                }
+                // Normalize date fields (store as UTC midnight where applicable)
+                const normalizeDate = (value) => {
+                    if (!value) {
+                        return undefined;
+                    }
+                    if (typeof value === 'string') {
+                        if (!value)
+                            return undefined;
+                        return new Date(`${value}T00:00:00.000Z`);
+                    }
+                    return new Date(value);
+                };
+                body.dateOfFIR = normalizeDate(body.dateOfFIR);
+                body.dateOfFiling = body.dateOfFIR; // legacy compatibility
+                // Normalize dates in investigatingOfficers array
+                if (body.investigatingOfficers && Array.isArray(body.investigatingOfficers)) {
+                    body.investigatingOfficers = body.investigatingOfficers.map(io => (Object.assign(Object.assign({}, io), { from: normalizeDate(io.from) || undefined, to: normalizeDate(io.to) || undefined })));
+                }
+                // Legacy fields for compatibility (use first IO if available)
+                const firstIO = body.investigatingOfficers && body.investigatingOfficers.length > 0
+                    ? body.investigatingOfficers[0]
+                    : null;
+                if (firstIO) {
+                    body.investigatingOfficer = firstIO.name;
+                    body.investigatingOfficerRank = firstIO.rank;
+                    body.investigatingOfficerPosting = firstIO.posting;
+                    body.investigatingOfficerContact = firstIO.contact;
+                    body.investigatingOfficerFrom = firstIO.from || undefined;
+                    body.investigatingOfficerTo = firstIO.to || undefined;
+                }
+                body.branch = body.branchName;
+                body.sections = body.sections && body.sections.length > 0 ? body.sections : [body.underSection].filter(Boolean);
+                // Handle writSubType: set to undefined (not null) when writType is not BAIL
+                if (body.writType !== 'BAIL') {
+                    body.writSubType = undefined;
+                }
+                else if (body.writSubType === null) {
+                    // Convert null to undefined for Mongoose compatibility
+                    body.writSubType = undefined;
+                }
+                if (body.writType !== 'ANY_OTHER') {
+                    body.writTypeOther = undefined;
+                }
+                // Don't update email - keep original
+                const fir = yield model_1.default.findOneAndUpdate({ _id: new mongoose_1.Types.ObjectId(id), email }, Object.assign(Object.assign({}, body), { email }), // Ensure email is not changed
+                { new: true, runValidators: true });
+                if (!fir) {
+                    throw new Error('FIR not found or access denied');
+                }
+                return fir;
+            }
+            catch (error) {
+                throw new Error(error.message);
+            }
+        });
+    },
     remove(id, email) {
         return __awaiter(this, void 0, void 0, function* () {
             try {

@@ -47,6 +47,19 @@ export async function create(req: RequestWithUser, res: Response, next: NextFunc
     }
 }
 
+export async function update(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const email = req.email || (req.user as any)?.email;
+        if (!email) {
+            return next(new HttpError(401, 'User email not found in token'));
+        }
+        const fir: IFIRModel = await FIRService.update(req.params.id, req.body, email);
+        res.status(200).json(fir);
+    } catch (error) {
+        next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
+    }
+}
+
 export async function remove(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
         const email = req.email || (req.user as any)?.email;
