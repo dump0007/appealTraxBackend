@@ -67,7 +67,7 @@ class FIRValidation extends Validation {
             petitionerAddress: Joi.string().trim().required(),
             petitionerPrayer: Joi.string().trim().required(),
             respondents: Joi.array().items(respondentSchema).min(1).required(),
-            status: Joi.string().valid('REGISTERED', 'UNDER_INVESTIGATION', 'ONGOING_HEARING', 'CHARGESHEET_FILED', 'CLOSED', 'WITHDRAWN').required(),
+            status: Joi.string().valid('REGISTERED', 'UNDER_INVESTIGATION', 'ONGOING_HEARING', 'CHARGESHEET_FILED', 'CLOSED', 'WITHDRAWN').default('REGISTERED'),
             linkedWrits: Joi.array().items(this.customJoi.objectId()).default([]),
         });
 

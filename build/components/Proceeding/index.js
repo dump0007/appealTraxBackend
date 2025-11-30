@@ -132,6 +132,7 @@ function create(req, res, next) {
             parseJsonField('noticeOfMotion');
             parseJsonField('replyTracking');
             parseJsonField('argumentDetails');
+            parseJsonField('anyOtherDetails');
             parseJsonField('decisionDetails');
             // Add filename to body
             if (orderOfProceedingFilename) {

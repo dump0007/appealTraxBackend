@@ -30,8 +30,12 @@ const NoticeOfMotionSubSchema = new mongoose_1.Schema({
     formatSubmitted: { type: Boolean, required: false },
     formatFilledBy: PersonSubSchema,
     appearingAG: PersonSubSchema,
+    appearingAGDetails: { type: String, trim: true },
+    aagDgWhoWillAppear: { type: String, trim: true },
     attendingOfficer: PersonSubSchema,
+    attendingOfficerDetails: { type: String, trim: true },
     investigatingOfficer: PersonSubSchema,
+    investigatingOfficerName: { type: String, trim: true },
     nextDateOfHearing: { type: Date },
     officerDeputedForReply: { type: String, trim: true },
     vettingOfficerDetails: { type: String, trim: true },
@@ -39,6 +43,11 @@ const NoticeOfMotionSubSchema = new mongoose_1.Schema({
     replyFilingDate: { type: Date },
     advocateGeneralName: { type: String, trim: true },
     replyScrutinizedByHC: { type: Boolean },
+    // ReplyTracking fields for TO_FILE_REPLY entries (per entry)
+    proceedingInCourt: { type: String, trim: true },
+    orderInShort: { type: String, trim: true },
+    nextActionablePoint: { type: String, trim: true },
+    nextDateOfHearingReply: { type: Date },
 }, { _id: false });
 const ReplyTrackingSubSchema = new mongoose_1.Schema({
     proceedingInCourt: { type: String },
@@ -47,14 +56,21 @@ const ReplyTrackingSubSchema = new mongoose_1.Schema({
     nextDateOfHearing: { type: Date },
 }, { _id: false });
 const ArgumentDetailsSubSchema = new mongoose_1.Schema({
-    details: { type: String, trim: true },
+    argumentBy: { type: String, trim: true },
+    argumentWith: { type: String, trim: true },
     nextDateOfHearing: { type: Date },
 }, { _id: false });
 const DecisionDetailsSubSchema = new mongoose_1.Schema({
-    writStatus: { type: String, enum: ['ALLOWED', 'PENDING', 'DISMISSED', 'WITHDRAWN', 'DIRECTION'], required: true },
-    remarks: { type: String },
-    decisionByCourt: { type: String },
+    writStatus: { type: String, enum: ['ALLOWED', 'PENDING', 'DISMISSED', 'WITHDRAWN', 'DIRECTION'] },
     dateOfDecision: { type: Date },
+    decisionByCourt: { type: String, trim: true },
+    remarks: { type: String, trim: true },
+}, { _id: false });
+const AnyOtherDetailsSubSchema = new mongoose_1.Schema({
+    attendingOfficerDetails: { type: String, trim: true },
+    officerDetails: PersonSubSchema,
+    appearingAGDetails: { type: String, trim: true },
+    details: { type: String, trim: true },
 }, { _id: false });
 const ProceedingSchema = new mongoose_1.Schema({
     fir: { type: mongoose_1.Schema.Types.ObjectId, ref: 'FIRModel', required: true, index: true },
@@ -62,7 +78,7 @@ const ProceedingSchema = new mongoose_1.Schema({
     type: {
         type: String,
         required: true,
-        enum: ['NOTICE_OF_MOTION', 'TO_FILE_REPLY', 'ARGUMENT', 'DECISION'],
+        enum: ['NOTICE_OF_MOTION', 'TO_FILE_REPLY', 'ARGUMENT', 'ANY_OTHER'],
         index: true,
     },
     summary: { type: String },
@@ -70,8 +86,8 @@ const ProceedingSchema = new mongoose_1.Schema({
     hearingDetails: HearingDetailsSubSchema,
     noticeOfMotion: mongoose_1.Schema.Types.Mixed,
     replyTracking: ReplyTrackingSubSchema,
-    argumentDetails: ArgumentDetailsSubSchema,
-    decisionDetails: DecisionDetailsSubSchema,
+    argumentDetails: mongoose_1.Schema.Types.Mixed,
+    anyOtherDetails: mongoose_1.Schema.Types.Mixed,
     createdBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'UserModel', required: true, index: true },
     email: { type: String, required: true, trim: true, index: true },
     draft: { type: Boolean, default: false, index: true },

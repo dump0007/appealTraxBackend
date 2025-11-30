@@ -84,28 +84,28 @@ const ProceedingService: IProceedingService = {
             if (body.noticeOfMotion) {
                 const cleanNoticeOfMotion = (notice: any) => {
                     if (!notice) return notice;
-                    // Clean up empty date strings (handle both Date and string types)
+                // Clean up empty date strings (handle both Date and string types)
                     const nextDate: any = notice.nextDateOfHearing;
-                    if (nextDate === null || nextDate === undefined || 
-                        (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
+                if (nextDate === null || nextDate === undefined || 
+                    (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
                         notice.nextDateOfHearing = undefined;
-                    }
+                }
                     const replyDate: any = notice.replyFilingDate;
-                    if (replyDate === null || replyDate === undefined || 
-                        (typeof replyDate === 'string' && String(replyDate).trim() === '')) {
+                if (replyDate === null || replyDate === undefined || 
+                    (typeof replyDate === 'string' && String(replyDate).trim() === '')) {
                         notice.replyFilingDate = undefined;
-                    }
-                    // Clean up empty person objects (if name is empty or missing)
+                }
+                // Clean up empty person objects (if name is empty or missing)
                     if (notice.formatFilledBy) {
                         if (!notice.formatFilledBy.name || notice.formatFilledBy.name.trim() === '') {
                             notice.formatFilledBy = undefined;
-                        }
                     }
+                }
                     if (notice.appearingAG) {
                         if (!notice.appearingAG.name || notice.appearingAG.name.trim() === '') {
                             notice.appearingAG = undefined;
-                        }
                     }
+                }
                     if (notice.attendingOfficer) {
                         if (!notice.attendingOfficer.name || notice.attendingOfficer.name.trim() === '') {
                             notice.attendingOfficer = undefined;
@@ -135,21 +135,39 @@ const ProceedingService: IProceedingService = {
                 }
             }
             if (body.argumentDetails) {
-                const nextDate: any = body.argumentDetails.nextDateOfHearing;
-                if (nextDate === null || nextDate === undefined || 
-                    (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
-                    body.argumentDetails.nextDateOfHearing = undefined;
-                }
-                if (body.argumentDetails.details && typeof body.argumentDetails.details === 'string') {
-                    body.argumentDetails.details = body.argumentDetails.details.trim();
+                // Handle both single object and array formats
+                if (Array.isArray(body.argumentDetails)) {
+                    (body.argumentDetails as any) = body.argumentDetails.map((entry: any) => {
+                        const nextDate: any = entry.nextDateOfHearing;
+                        if (nextDate === null || nextDate === undefined || 
+                            (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
+                            entry.nextDateOfHearing = undefined;
+                        }
+                        if (entry.argumentBy && typeof entry.argumentBy === 'string') {
+                            entry.argumentBy = entry.argumentBy.trim();
+                        }
+                        if (entry.argumentWith && typeof entry.argumentWith === 'string') {
+                            entry.argumentWith = entry.argumentWith.trim();
+                        }
+                        return entry;
+                    });
+                } else {
+                    const nextDate: any = (body.argumentDetails as any).nextDateOfHearing;
+                    if (nextDate === null || nextDate === undefined || 
+                        (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
+                        (body.argumentDetails as any).nextDateOfHearing = undefined;
+                    }
+                    if ((body.argumentDetails as any).argumentBy && typeof (body.argumentDetails as any).argumentBy === 'string') {
+                        (body.argumentDetails as any).argumentBy = (body.argumentDetails as any).argumentBy.trim();
+                    }
+                    if ((body.argumentDetails as any).argumentWith && typeof (body.argumentDetails as any).argumentWith === 'string') {
+                        (body.argumentDetails as any).argumentWith = (body.argumentDetails as any).argumentWith.trim();
+                    }
                 }
             }
-            if (body.decisionDetails) {
-                const decisionDate: any = body.decisionDetails.dateOfDecision;
-                if (decisionDate === null || decisionDate === undefined || 
-                    (typeof decisionDate === 'string' && String(decisionDate).trim() === '')) {
-                    body.decisionDetails.dateOfDecision = undefined;
-                }
+            // Clean up anyOtherDetails if present
+            if (body.anyOtherDetails) {
+                // No date fields to clean up for anyOtherDetails
             }
             
             // Ensure createdBy is set (controller should set it, but ensure it's there)

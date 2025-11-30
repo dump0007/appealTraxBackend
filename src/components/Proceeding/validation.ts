@@ -39,17 +39,27 @@ class ProceedingValidation extends Validation {
                 then: personSchema.required(),
                 otherwise: personSchemaOptional,
             }),
-            // appearingAG is required for both modes
-            appearingAG: Joi.when('attendanceMode', {
-                is: Joi.string().valid('BY_FORMAT', 'BY_PERSON'),
-                then: personSchema.required(),
-                otherwise: personSchemaOptional,
-            }),
-            // attendingOfficer and investigatingOfficer are required when attendanceMode is BY_PERSON
-            attendingOfficer: Joi.when('attendanceMode', {
+            // appearingAG is legacy - use appearingAGDetails for BY_PERSON mode
+            appearingAG: personSchemaOptional,
+            // appearingAGDetails is required only for BY_PERSON mode
+            appearingAGDetails: Joi.when('attendanceMode', {
                 is: 'BY_PERSON',
-                then: personSchema.required(),
-                otherwise: personSchemaOptional,
+                then: Joi.string().trim().required(),
+                otherwise: Joi.string().trim().allow('', null).optional(),
+            }),
+            // aagDgWhoWillAppear is required only for BY_FORMAT mode
+            aagDgWhoWillAppear: Joi.when('attendanceMode', {
+                is: 'BY_FORMAT',
+                then: Joi.string().trim().required(),
+                otherwise: Joi.string().trim().allow('', null).optional(),
+            }),
+            // attendingOfficer is legacy - use attendingOfficerDetails for BY_PERSON mode
+            attendingOfficer: personSchemaOptional,
+            // attendingOfficerDetails is required only for BY_PERSON mode
+            attendingOfficerDetails: Joi.when('attendanceMode', {
+                is: 'BY_PERSON',
+                then: Joi.string().trim().required(),
+                otherwise: Joi.string().trim().allow('', null).optional(),
             }),
             investigatingOfficer: Joi.when('attendanceMode', {
                 is: 'BY_PERSON',
@@ -77,6 +87,19 @@ class ProceedingValidation extends Validation {
             ),
             advocateGeneralName: Joi.string().trim().allow('', null),
             replyScrutinizedByHC: Joi.boolean().allow(null),
+            investigatingOfficerName: Joi.string().trim().allow('', null),
+            // ReplyTracking fields for TO_FILE_REPLY entries (per entry)
+            proceedingInCourt: Joi.string().trim().allow('', null),
+            orderInShort: Joi.string().trim().allow('', null),
+            nextActionablePoint: Joi.string().trim().allow('', null),
+            nextDateOfHearingReply: Joi.alternatives().try(
+                Joi.date().allow(null),
+                Joi.string().allow('', null).custom((value, helpers) => {
+                    if (!value || value === '') return null;
+                    const date = new Date(value);
+                    return isNaN(date.getTime()) ? helpers.error('date.invalid') : date;
+                })
+            ),
         }).unknown(false);
 
         const replyTrackingSchema = Joi.object({
@@ -94,7 +117,8 @@ class ProceedingValidation extends Validation {
         }).unknown(false);
 
         const argumentDetailsSchema = Joi.object({
-            details: Joi.string().trim().required(),
+            argumentBy: Joi.string().trim().required(),
+            argumentWith: Joi.string().trim().required(),
             nextDateOfHearing: Joi.alternatives().try(
                 Joi.date(),
                 Joi.string().trim().custom((value, helpers) => {
@@ -109,8 +133,6 @@ class ProceedingValidation extends Validation {
 
         const decisionDetailsSchema = Joi.object({
             writStatus: Joi.string().valid('ALLOWED', 'PENDING', 'DISMISSED', 'WITHDRAWN', 'DIRECTION').required(),
-            remarks: Joi.string().trim().allow('', null),
-            decisionByCourt: Joi.string().trim().allow('', null),
             dateOfDecision: Joi.alternatives().try(
                 Joi.date().allow(null),
                 Joi.string().allow('', null).custom((value, helpers) => {
@@ -119,11 +141,24 @@ class ProceedingValidation extends Validation {
                     return isNaN(date.getTime()) ? helpers.error('date.invalid') : date;
                 })
             ),
+            decisionByCourt: Joi.string().trim().allow('', null),
+            remarks: Joi.string().trim().allow('', null),
+        }).unknown(false);
+
+        const anyOtherDetailsSchema = Joi.object({
+            attendingOfficerDetails: Joi.string().trim().required(),
+            officerDetails: Joi.object({
+                name: Joi.string().trim().required(),
+                rank: Joi.string().trim().required(),
+                mobile: Joi.string().trim().required(),
+            }).required(),
+            appearingAGDetails: Joi.string().trim().required(),
+            details: Joi.string().trim().required(),
         }).unknown(false);
 
         const schema: Joi.Schema = Joi.object({
             fir: this.customJoi.objectId().required(),
-            type: Joi.string().valid('NOTICE_OF_MOTION', 'TO_FILE_REPLY', 'ARGUMENT', 'DECISION').required(),
+            type: Joi.string().valid('NOTICE_OF_MOTION', 'TO_FILE_REPLY', 'ARGUMENT', 'ANY_OTHER').required(),
             summary: Joi.string().trim().allow('', null),
             details: Joi.string().trim().allow('', null),
             hearingDetails: Joi.when('draft', {
@@ -148,14 +183,21 @@ class ProceedingValidation extends Validation {
             }),
             argumentDetails: Joi.when('type', {
                 is: 'ARGUMENT',
-                then: argumentDetailsSchema.allow(null),
+                then: Joi.alternatives().try(
+                    argumentDetailsSchema,
+                    Joi.array().items(argumentDetailsSchema).min(1)
+                ).allow(null), // Support both single object and array
                 otherwise: Joi.optional().allow(null),
             }),
-            decisionDetails: Joi.when('type', {
-                is: 'DECISION',
-                then: decisionDetailsSchema.allow(null),
+            anyOtherDetails: Joi.when('type', {
+                is: 'ANY_OTHER',
+                then: Joi.alternatives().try(
+                    anyOtherDetailsSchema,
+                    Joi.array().items(anyOtherDetailsSchema).min(1)
+                ).allow(null), // Support both single object and array
                 otherwise: Joi.optional().allow(null),
             }),
+            decisionDetails: decisionDetailsSchema.allow(null),
             createdBy: this.customJoi.objectId().allow(null), // Optional - backend sets it from JWT token
             attachments: Joi.array().items(Joi.object({
                 fileName: Joi.string().required(),

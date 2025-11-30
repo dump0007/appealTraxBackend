@@ -116,7 +116,8 @@ export async function create(req: RequestWithUser, res: Response, next: NextFunc
         parseJsonField('noticeOfMotion' as keyof IProceedingModel);
         parseJsonField('replyTracking');
         parseJsonField('argumentDetails');
-        parseJsonField('decisionDetails');
+        parseJsonField('anyOtherDetails');
+        parseJsonField('decisionDetails' as keyof IProceedingModel);
 
         // Add filename to body
         if (orderOfProceedingFilename) {

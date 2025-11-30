@@ -152,21 +152,40 @@ const ProceedingService = {
                     }
                 }
                 if (body.argumentDetails) {
-                    const nextDate = body.argumentDetails.nextDateOfHearing;
-                    if (nextDate === null || nextDate === undefined ||
-                        (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
-                        body.argumentDetails.nextDateOfHearing = undefined;
+                    // Handle both single object and array formats
+                    if (Array.isArray(body.argumentDetails)) {
+                        body.argumentDetails = body.argumentDetails.map((entry) => {
+                            const nextDate = entry.nextDateOfHearing;
+                            if (nextDate === null || nextDate === undefined ||
+                                (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
+                                entry.nextDateOfHearing = undefined;
+                            }
+                            if (entry.argumentBy && typeof entry.argumentBy === 'string') {
+                                entry.argumentBy = entry.argumentBy.trim();
+                            }
+                            if (entry.argumentWith && typeof entry.argumentWith === 'string') {
+                                entry.argumentWith = entry.argumentWith.trim();
+                            }
+                            return entry;
+                        });
                     }
-                    if (body.argumentDetails.details && typeof body.argumentDetails.details === 'string') {
-                        body.argumentDetails.details = body.argumentDetails.details.trim();
+                    else {
+                        const nextDate = body.argumentDetails.nextDateOfHearing;
+                        if (nextDate === null || nextDate === undefined ||
+                            (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
+                            body.argumentDetails.nextDateOfHearing = undefined;
+                        }
+                        if (body.argumentDetails.argumentBy && typeof body.argumentDetails.argumentBy === 'string') {
+                            body.argumentDetails.argumentBy = body.argumentDetails.argumentBy.trim();
+                        }
+                        if (body.argumentDetails.argumentWith && typeof body.argumentDetails.argumentWith === 'string') {
+                            body.argumentDetails.argumentWith = body.argumentDetails.argumentWith.trim();
+                        }
                     }
                 }
-                if (body.decisionDetails) {
-                    const decisionDate = body.decisionDetails.dateOfDecision;
-                    if (decisionDate === null || decisionDate === undefined ||
-                        (typeof decisionDate === 'string' && String(decisionDate).trim() === '')) {
-                        body.decisionDetails.dateOfDecision = undefined;
-                    }
+                // Clean up anyOtherDetails if present
+                if (body.anyOtherDetails) {
+                    // No date fields to clean up for anyOtherDetails
                 }
                 // Ensure createdBy is set (controller should set it, but ensure it's there)
                 if (!body.createdBy) {
