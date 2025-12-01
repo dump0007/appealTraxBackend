@@ -212,7 +212,19 @@ const ProceedingService: IProceedingService = {
                 body.sequence = last && typeof last.sequence === 'number' ? last.sequence + 1 : 1;
             }
             
-            return await ProceedingModel.create(body);
+            const proceeding = await ProceedingModel.create(body);
+            
+            // Update FIR status if proceeding has decisionDetails with writStatus
+            // Only update for non-draft (final) proceedings
+            if (!body.draft && body.decisionDetails && body.decisionDetails.writStatus) {
+                const updateResult = await FIRModel.updateOne(
+                    { _id: body.fir, email },
+                    { $set: { status: body.decisionDetails.writStatus } }
+                );
+                console.log(`[ProceedingService] Updated FIR ${body.fir} status to ${body.decisionDetails.writStatus}. Matched: ${updateResult.matchedCount}, Modified: ${updateResult.modifiedCount}`);
+            }
+            
+            return proceeding;
         } catch (error) {
             throw new Error(error.message);
         }

@@ -1,13 +1,8 @@
 import { Document, Schema, Types } from 'mongoose';
 import * as connections from '../../config/connection/connection';
 
-export type FIRStatus =
-    | 'REGISTERED'
-    | 'UNDER_INVESTIGATION'
-    | 'ONGOING_HEARING'
-    | 'CHARGESHEET_FILED'
-    | 'CLOSED'
-    | 'WITHDRAWN';
+// Import WritStatus from Proceeding model
+export type WritStatus = 'ALLOWED' | 'PENDING' | 'DISMISSED' | 'WITHDRAWN' | 'DIRECTION';
 
 export type WritType =
     | 'BAIL'
@@ -63,7 +58,7 @@ export interface IFIRModel extends Document {
     petitionerAddress: string;
     petitionerPrayer: string;
     respondents: IRespondentDetail[];
-    status: FIRStatus;
+    status: WritStatus;
     linkedWrits?: Types.ObjectId[];
     email: string;
     createdAt: Date;
@@ -136,9 +131,8 @@ const FIRSchema: Schema<IFIRModel> = new Schema({
     respondents: { type: [RespondentSchema], default: [] },
     status: {
         type: String,
-        required: true,
-        enum: ['REGISTERED', 'UNDER_INVESTIGATION', 'ONGOING_HEARING','CHARGESHEET_FILED', 'CLOSED', 'WITHDRAWN'],
-        default: 'REGISTERED',
+        required: false,
+        enum: ['ALLOWED', 'PENDING', 'DISMISSED', 'WITHDRAWN', 'DIRECTION'],
         index: true,
     },
     linkedWrits: [{ type: Schema.Types.ObjectId, ref: 'WritModel' }],
