@@ -68,28 +68,7 @@ export async function create(req: RequestWithUser, res: Response, next: NextFunc
             createdBy = new Types.ObjectId();
         }
 
-        // Handle file upload if present
-        let orderOfProceedingFilename: string | undefined;
-        if (req.files && req.files.orderOfProceeding) {
-            const file = Array.isArray(req.files.orderOfProceeding) 
-                ? req.files.orderOfProceeding[0] 
-                : req.files.orderOfProceeding;
-            
-            // Validate file
-            const validation = validateProceedingFile(file);
-            if (!validation.valid) {
-                return next(new HttpError(400, validation.error || 'Invalid file'));
-            }
-
-            // Save file
-            try {
-                orderOfProceedingFilename = await saveProceedingFile(file);
-            } catch (error) {
-                return next(new HttpError(500, `Failed to save file: ${error.message}`));
-            }
-        }
-
-        // Parse body - handle both JSON and form-data
+        // Parse body - handle both JSON and form-data (must be done before processing files to set attachment fields)
         let body: any;
         if (typeof req.body === 'string') {
             try {
@@ -118,10 +97,251 @@ export async function create(req: RequestWithUser, res: Response, next: NextFunc
         parseJsonField('argumentDetails');
         parseJsonField('anyOtherDetails');
         parseJsonField('decisionDetails' as keyof IProceedingModel);
+        
+        // Parse draft field - it comes as a string from FormData
+        if (body.draft !== undefined) {
+            if (typeof body.draft === 'string') {
+                body.draft = body.draft === 'true' || body.draft === '1';
+            } else if (typeof body.draft === 'boolean') {
+                // Already boolean, keep as is
+            } else {
+                body.draft = Boolean(body.draft);
+            }
+        } else {
+            body.draft = false; // Default to false if not provided
+        }
+        
+        console.log(`[ProceedingController] Parsed draft field: ${body.draft} (type: ${typeof body.draft})`);
+
+        // Handle file uploads
+        let orderOfProceedingFilename: string | undefined;
+        const attachments: Array<{ fileName: string; fileUrl: string }> = [];
+        
+        // Handle orderOfProceeding file (legacy support)
+        if (req.files && req.files.orderOfProceeding) {
+            const file = Array.isArray(req.files.orderOfProceeding) 
+                ? req.files.orderOfProceeding[0] 
+                : req.files.orderOfProceeding;
+            
+            const validation = validateProceedingFile(file);
+            if (!validation.valid) {
+                return next(new HttpError(400, validation.error || 'Invalid file'));
+            }
+
+            try {
+                orderOfProceedingFilename = await saveProceedingFile(file);
+            } catch (error) {
+                return next(new HttpError(500, `Failed to save file: ${error.message}`));
+            }
+        }
+
+        // Handle attachment files for all proceeding types
+        if (req.files) {
+            // Process Notice of Motion attachments
+            const noticeOfMotionFiles = Object.keys(req.files).filter(key => 
+                key.startsWith('attachments_noticeOfMotion_')
+            );
+            for (const key of noticeOfMotionFiles) {
+                const fileObj = req.files[key];
+                const file = Array.isArray(fileObj) 
+                    ? fileObj[0] 
+                    : fileObj;
+                
+                const validation = validateProceedingFile(file);
+                if (!validation.valid) {
+                    return next(new HttpError(400, validation.error || `Invalid file: ${key}`));
+                }
+
+                try {
+                    const filename = await saveProceedingFile(file);
+                    attachments.push({
+                        fileName: file.name,
+                        fileUrl: `/assets/proceedings/${filename}`
+                    });
+                    
+                    // Extract index from key (e.g., "attachments_noticeOfMotion_0" -> 0)
+                    const indexMatch = key.match(/attachments_noticeOfMotion_(\d+)/);
+                    if (indexMatch) {
+                        const index = parseInt(indexMatch[1], 10);
+                        // Set attachment filename in the corresponding record
+                        if (body.noticeOfMotion) {
+                            if (Array.isArray(body.noticeOfMotion)) {
+                                if (body.noticeOfMotion[index]) {
+                                    body.noticeOfMotion[index].attachment = filename;
+                                }
+                            } else if (index === 0) {
+                                body.noticeOfMotion.attachment = filename;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    return next(new HttpError(500, `Failed to save file ${key}: ${error.message}`));
+                }
+            }
+
+            // Process To File Reply attachments
+            const replyTrackingFiles = Object.keys(req.files).filter(key => 
+                key.startsWith('attachments_replyTracking_')
+            );
+            for (const key of replyTrackingFiles) {
+                const fileObj = req.files[key];
+                const file = Array.isArray(fileObj) 
+                    ? fileObj[0] 
+                    : fileObj;
+                
+                const validation = validateProceedingFile(file);
+                if (!validation.valid) {
+                    return next(new HttpError(400, validation.error || `Invalid file: ${key}`));
+                }
+
+                try {
+                    const filename = await saveProceedingFile(file);
+                    attachments.push({
+                        fileName: file.name,
+                        fileUrl: `/assets/proceedings/${filename}`
+                    });
+                    
+                    // Extract index from key (e.g., "attachments_replyTracking_0" -> 0)
+                    const indexMatch = key.match(/attachments_replyTracking_(\d+)/);
+                    if (indexMatch) {
+                        const index = parseInt(indexMatch[1], 10);
+                        // Set attachment filename in the corresponding record
+                        if (body.replyTracking) {
+                            if (Array.isArray(body.replyTracking)) {
+                                if (body.replyTracking[index]) {
+                                    body.replyTracking[index].attachment = filename;
+                                }
+                            } else if (index === 0) {
+                                body.replyTracking.attachment = filename;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    return next(new HttpError(500, `Failed to save file ${key}: ${error.message}`));
+                }
+            }
+
+            // Process Argument attachments
+            const argumentFiles = Object.keys(req.files).filter(key => 
+                key.startsWith('attachments_argumentDetails_')
+            );
+            for (const key of argumentFiles) {
+                const fileObj = req.files[key];
+                const file = Array.isArray(fileObj) 
+                    ? fileObj[0] 
+                    : fileObj;
+                
+                const validation = validateProceedingFile(file);
+                if (!validation.valid) {
+                    return next(new HttpError(400, validation.error || `Invalid file: ${key}`));
+                }
+
+                try {
+                    const filename = await saveProceedingFile(file);
+                    attachments.push({
+                        fileName: file.name,
+                        fileUrl: `/assets/proceedings/${filename}`
+                    });
+                    
+                    // Extract index from key (e.g., "attachments_argumentDetails_0" -> 0)
+                    const indexMatch = key.match(/attachments_argumentDetails_(\d+)/);
+                    if (indexMatch) {
+                        const index = parseInt(indexMatch[1], 10);
+                        // Set attachment filename in the corresponding record
+                        if (body.argumentDetails) {
+                            if (Array.isArray(body.argumentDetails)) {
+                                if (body.argumentDetails[index]) {
+                                    body.argumentDetails[index].attachment = filename;
+                                }
+                            } else if (index === 0) {
+                                body.argumentDetails.attachment = filename;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    return next(new HttpError(500, `Failed to save file ${key}: ${error.message}`));
+                }
+            }
+
+            // Process Any Other attachments
+            const anyOtherFiles = Object.keys(req.files).filter(key => 
+                key.startsWith('attachments_anyOtherDetails_')
+            );
+            for (const key of anyOtherFiles) {
+                const fileObj = req.files[key];
+                const file = Array.isArray(fileObj) 
+                    ? fileObj[0] 
+                    : fileObj;
+                
+                const validation = validateProceedingFile(file);
+                if (!validation.valid) {
+                    return next(new HttpError(400, validation.error || `Invalid file: ${key}`));
+                }
+
+                try {
+                    const filename = await saveProceedingFile(file);
+                    attachments.push({
+                        fileName: file.name,
+                        fileUrl: `/assets/proceedings/${filename}`
+                    });
+                    
+                    // Extract index from key (e.g., "attachments_anyOtherDetails_0" -> 0)
+                    const indexMatch = key.match(/attachments_anyOtherDetails_(\d+)/);
+                    if (indexMatch) {
+                        const index = parseInt(indexMatch[1], 10);
+                        // Set attachment filename in the corresponding record
+                        if (body.anyOtherDetails) {
+                            if (Array.isArray(body.anyOtherDetails)) {
+                                if (body.anyOtherDetails[index]) {
+                                    body.anyOtherDetails[index].attachment = filename;
+                                }
+                            } else if (index === 0) {
+                                body.anyOtherDetails.attachment = filename;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    return next(new HttpError(500, `Failed to save file ${key}: ${error.message}`));
+                }
+            }
+
+            // Process Decision Details attachment
+            if (req.files.attachments_decisionDetails) {
+                const fileObj = req.files.attachments_decisionDetails;
+                const file = Array.isArray(fileObj) 
+                    ? fileObj[0] 
+                    : fileObj;
+                
+                const validation = validateProceedingFile(file);
+                if (!validation.valid) {
+                    return next(new HttpError(400, validation.error || 'Invalid decision details file'));
+                }
+
+                try {
+                    const filename = await saveProceedingFile(file);
+                    attachments.push({
+                        fileName: file.name,
+                        fileUrl: `/assets/proceedings/${filename}`
+                    });
+                    
+                    // Set attachment filename in decision details
+                    if (body.decisionDetails) {
+                        body.decisionDetails.attachment = filename;
+                    }
+                } catch (error) {
+                    return next(new HttpError(500, `Failed to save decision details file: ${error.message}`));
+                }
+            }
+        }
 
         // Add filename to body
         if (orderOfProceedingFilename) {
             body.orderOfProceedingFilename = orderOfProceedingFilename;
+        }
+
+        // Add attachments to body
+        if (attachments.length > 0) {
+            body.attachments = attachments;
         }
 
         // Ensure createdBy is set in body if not provided

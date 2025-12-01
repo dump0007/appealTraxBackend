@@ -128,10 +128,20 @@ const ProceedingService: IProceedingService = {
             
             // Clean up dates in other sections
             if (body.replyTracking) {
-                const nextDate: any = body.replyTracking.nextDateOfHearing;
-                if (nextDate === null || nextDate === undefined || 
-                    (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
-                    body.replyTracking.nextDateOfHearing = undefined;
+                if (Array.isArray(body.replyTracking)) {
+                    body.replyTracking = body.replyTracking.map((entry: any) => {
+                        if (entry.nextDateOfHearingReply === null || entry.nextDateOfHearingReply === undefined || 
+                            (typeof entry.nextDateOfHearingReply === 'string' && String(entry.nextDateOfHearingReply).trim() === '')) {
+                            entry.nextDateOfHearingReply = undefined;
+                        }
+                        return entry;
+                    });
+                } else {
+                    const nextDate: any = (body.replyTracking as any).nextDateOfHearingReply;
+                    if (nextDate === null || nextDate === undefined || 
+                        (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
+                        (body.replyTracking as any).nextDateOfHearingReply = undefined;
+                    }
                 }
             }
             if (body.argumentDetails) {
@@ -168,6 +178,22 @@ const ProceedingService: IProceedingService = {
             // Clean up anyOtherDetails if present
             if (body.anyOtherDetails) {
                 // No date fields to clean up for anyOtherDetails
+            }
+            
+            // Clean up decisionDetails if present
+            if (body.decisionDetails) {
+                const decisionDate: any = body.decisionDetails.dateOfDecision;
+                if (decisionDate === null || decisionDate === undefined || 
+                    (typeof decisionDate === 'string' && String(decisionDate).trim() === '')) {
+                    body.decisionDetails.dateOfDecision = undefined;
+                }
+                // Trim string fields
+                if (body.decisionDetails.decisionByCourt && typeof body.decisionDetails.decisionByCourt === 'string') {
+                    body.decisionDetails.decisionByCourt = body.decisionDetails.decisionByCourt.trim();
+                }
+                if (body.decisionDetails.remarks && typeof body.decisionDetails.remarks === 'string') {
+                    body.decisionDetails.remarks = body.decisionDetails.remarks.trim();
+                }
             }
             
             // Ensure createdBy is set (controller should set it, but ensure it's there)
@@ -214,18 +240,57 @@ const ProceedingService: IProceedingService = {
             
             const proceeding = await ProceedingModel.create(body);
             
+            // Debug logging - log the actual proceeding that was created
+            console.log(`[ProceedingService] Proceeding created with ID: ${proceeding._id}`);
+            console.log(`[ProceedingService] Proceeding draft flag: ${proceeding.draft} (body.draft was: ${body.draft})`);
+            console.log(`[ProceedingService] Proceeding decisionDetails:`, JSON.stringify(proceeding.decisionDetails));
+            console.log(`[ProceedingService] Body decisionDetails:`, JSON.stringify(body.decisionDetails));
+            
             // Update FIR status if proceeding has decisionDetails with writStatus
             // Only update for non-draft (final) proceedings
-            if (!body.draft && body.decisionDetails && body.decisionDetails.writStatus) {
-                const updateResult = await FIRModel.updateOne(
-                    { _id: body.fir, email },
-                    { $set: { status: body.decisionDetails.writStatus } }
-                );
-                console.log(`[ProceedingService] Updated FIR ${body.fir} status to ${body.decisionDetails.writStatus}. Matched: ${updateResult.matchedCount}, Modified: ${updateResult.modifiedCount}`);
+            // Check if writStatus exists and is not empty
+            const writStatus = body.decisionDetails?.writStatus;
+            const hasWritStatus = writStatus && 
+                                  (typeof writStatus === 'string' ? writStatus.trim() !== '' : true);
+            
+            console.log(`[ProceedingService] Checking FIR update conditions: draft=${body.draft}, proceeding.draft=${proceeding.draft}, hasDecisionDetails=${!!body.decisionDetails}, writStatus=${writStatus}, hasWritStatus=${hasWritStatus}`);
+            
+            if (!body.draft && body.decisionDetails && hasWritStatus) {
+                try {
+                    const updateResult = await FIRModel.updateOne(
+                        { _id: body.fir, email },
+                        { $set: { status: writStatus } }
+                    );
+                    console.log(`[ProceedingService] Updated FIR ${body.fir} status to ${writStatus}. Matched: ${updateResult.matchedCount}, Modified: ${updateResult.modifiedCount}`);
+                    
+                    if (updateResult.matchedCount === 0) {
+                        console.warn(`[ProceedingService] FIR ${body.fir} not found or email mismatch (email: ${email}). Attempting update without email filter...`);
+                        // Try updating without email filter (in case FIR was created by different user or email mismatch)
+                        const updateResultNoEmail = await FIRModel.updateOne(
+                            { _id: body.fir },
+                            { $set: { status: writStatus } }
+                        );
+                        console.log(`[ProceedingService] Update without email filter: Matched: ${updateResultNoEmail.matchedCount}, Modified: ${updateResultNoEmail.modifiedCount}`);
+                    }
+                } catch (updateError) {
+                    console.error(`[ProceedingService] Error updating FIR status:`, updateError);
+                    // Don't throw - proceeding was created successfully, just log the error
+                }
+            } else {
+                // Log why FIR status wasn't updated
+                if (body.draft) {
+                    console.log(`[ProceedingService] Skipping FIR status update - proceeding is a draft`);
+                } else if (!body.decisionDetails) {
+                    console.log(`[ProceedingService] Skipping FIR status update - no decisionDetails in proceeding`);
+                } else if (!hasWritStatus) {
+                    console.log(`[ProceedingService] Skipping FIR status update - writStatus is empty or invalid. decisionDetails:`, JSON.stringify(body.decisionDetails));
+                }
             }
             
             return proceeding;
         } catch (error) {
+            console.log("ERROR ->",error);
+            
             throw new Error(error.message);
         }
     },

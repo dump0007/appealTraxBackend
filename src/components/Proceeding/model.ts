@@ -27,32 +27,30 @@ export interface INoticeOfMotionDetails {
     attendingOfficer?: IPersonDetails; // Legacy - for BY_PERSON mode (deprecated, use attendingOfficerDetails)
     attendingOfficerDetails?: string; // For BY_PERSON mode
     investigatingOfficer?: IPersonDetails;
-    investigatingOfficerName?: string; // For TO_FILE_REPLY mode - single name field
-    nextDateOfHearing?: Date;
+    details: string; // Details of proceeding
+    attachment?: string; // Filename of the attached document for this record
+}
+
+export interface IReplyTrackingDetails {
     officerDeputedForReply?: string;
     vettingOfficerDetails?: string;
     replyFiled?: boolean;
     replyFilingDate?: Date;
     advocateGeneralName?: string;
     replyScrutinizedByHC?: boolean;
-    // ReplyTracking fields for TO_FILE_REPLY entries (per entry)
+    investigatingOfficerName?: string;
     proceedingInCourt?: string;
     orderInShort?: string;
     nextActionablePoint?: string;
-    nextDateOfHearingReply?: Date; // Next date of hearing for reply tracking
-}
-
-export interface IReplyTrackingDetails {
-    proceedingInCourt?: string;
-    orderInShort?: string;
-    nextActionablePoint?: string;
-    nextDateOfHearing?: Date;
+    nextDateOfHearingReply?: Date;
+    attachment?: string; // Filename of the attached document for this record
 }
 
 export interface IArgumentDetails {
     argumentBy?: string;
     argumentWith?: string;
     nextDateOfHearing?: Date;
+    attachment?: string; // Filename of the attached document for this record
 }
 
 export type WritStatus = 'ALLOWED' | 'PENDING' | 'DISMISSED' | 'WITHDRAWN' | 'DIRECTION';
@@ -62,6 +60,7 @@ export interface IDecisionDetails {
     dateOfDecision?: Date;
     decisionByCourt?: string;
     remarks?: string;
+    attachment?: string; // Filename of the attached document for decision details
 }
 
 export interface IAnyOtherDetails {
@@ -69,6 +68,7 @@ export interface IAnyOtherDetails {
     officerDetails?: IPersonDetails;
     appearingAGDetails?: string;
     details?: string;
+    attachment?: string; // Filename of the attached document for this record
 }
 
 export interface IProceedingModel extends Document {
@@ -79,8 +79,8 @@ export interface IProceedingModel extends Document {
     details?: string;
     hearingDetails?: IHearingDetails;
     noticeOfMotion?: INoticeOfMotionDetails | INoticeOfMotionDetails[]; // Support both single and array
-    replyTracking?: IReplyTrackingDetails;
-    argumentDetails?: IArgumentDetails;
+    replyTracking?: IReplyTrackingDetails | IReplyTrackingDetails[]; // Support both single and array for TO_FILE_REPLY
+    argumentDetails?: IArgumentDetails | IArgumentDetails[]; // Support both single and array
     anyOtherDetails?: IAnyOtherDetails | IAnyOtherDetails[];
     decisionDetails?: IDecisionDetails;
     createdBy: Types.ObjectId; // Officer ref
@@ -113,7 +113,7 @@ const HearingDetailsSubSchema = new Schema({
 }, { _id: false });
 
 const NoticeOfMotionSubSchema = new Schema({
-    attendanceMode: { type: String, enum: ['BY_FORMAT', 'BY_PERSON'], required: false },
+    attendanceMode: { type: String, enum: ['BY_FORMAT', 'BY_PERSON'], required: true },
     formatSubmitted: { type: Boolean, required: false },
     formatFilledBy: PersonSubSchema,
     appearingAG: PersonSubSchema, // Legacy - for BY_PERSON mode (deprecated, use appearingAGDetails)
@@ -122,32 +122,30 @@ const NoticeOfMotionSubSchema = new Schema({
     attendingOfficer: PersonSubSchema, // Legacy - for BY_PERSON mode (deprecated, use attendingOfficerDetails)
     attendingOfficerDetails: { type: String, trim: true }, // For BY_PERSON mode
     investigatingOfficer: PersonSubSchema,
-    investigatingOfficerName: { type: String, trim: true }, // For TO_FILE_REPLY mode - single name field
-    nextDateOfHearing: { type: Date },
+    details: { type: String, trim: true, required: true }, // Details of proceeding
+    attachment: { type: String, trim: true }, // Filename of the attached document for this record
+}, { _id: false });
+
+const ReplyTrackingSubSchema = new Schema({
     officerDeputedForReply: { type: String, trim: true },
     vettingOfficerDetails: { type: String, trim: true },
     replyFiled: { type: Boolean },
     replyFilingDate: { type: Date },
     advocateGeneralName: { type: String, trim: true },
     replyScrutinizedByHC: { type: Boolean },
-    // ReplyTracking fields for TO_FILE_REPLY entries (per entry)
+    investigatingOfficerName: { type: String, trim: true },
     proceedingInCourt: { type: String, trim: true },
     orderInShort: { type: String, trim: true },
     nextActionablePoint: { type: String, trim: true },
     nextDateOfHearingReply: { type: Date },
-}, { _id: false });
-
-const ReplyTrackingSubSchema = new Schema({
-    proceedingInCourt: { type: String },
-    orderInShort: { type: String },
-    nextActionablePoint: { type: String },
-    nextDateOfHearing: { type: Date },
+    attachment: { type: String, trim: true }, // Filename of the attached document for this record
 }, { _id: false });
 
 const ArgumentDetailsSubSchema = new Schema({
     argumentBy: { type: String, trim: true },
     argumentWith: { type: String, trim: true },
     nextDateOfHearing: { type: Date },
+    attachment: { type: String, trim: true }, // Filename of the attached document for this record
 }, { _id: false });
 
 const DecisionDetailsSubSchema = new Schema({
@@ -155,6 +153,7 @@ const DecisionDetailsSubSchema = new Schema({
     dateOfDecision: { type: Date },
     decisionByCourt: { type: String, trim: true },
     remarks: { type: String, trim: true },
+    attachment: { type: String, trim: true }, // Filename of the attached document for decision details
 }, { _id: false });
 
 const AnyOtherDetailsSubSchema = new Schema({
@@ -162,6 +161,7 @@ const AnyOtherDetailsSubSchema = new Schema({
     officerDetails: PersonSubSchema,
     appearingAGDetails: { type: String, trim: true },
     details: { type: String, trim: true },
+    attachment: { type: String, trim: true }, // Filename of the attached document for this record
 }, { _id: false });
 
 const ProceedingSchema: Schema<IProceedingModel> = new Schema({
@@ -177,9 +177,10 @@ const ProceedingSchema: Schema<IProceedingModel> = new Schema({
     details: { type: String },
     hearingDetails: HearingDetailsSubSchema,
     noticeOfMotion: Schema.Types.Mixed, // Support both single object and array
-    replyTracking: ReplyTrackingSubSchema,
+    replyTracking: Schema.Types.Mixed, // Support both single object and array for TO_FILE_REPLY
     argumentDetails: Schema.Types.Mixed, // Support both single object and array
     anyOtherDetails: Schema.Types.Mixed, // Support both single object and array
+    decisionDetails: DecisionDetailsSubSchema, // Decision details with writ status
     createdBy: { type: Schema.Types.ObjectId, ref: 'UserModel', required: true, index: true },
     email: { type: String, required: true, trim: true, index: true },
     draft: { type: Boolean, default: false, index: true },

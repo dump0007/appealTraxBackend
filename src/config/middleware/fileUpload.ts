@@ -23,11 +23,6 @@ const allowedMimes = [
 const allowedExtensions = ['.pdf', '.png', '.jpeg', '.jpg', '.xlsx', '.xls'];
 
 export function validateProceedingFile(file: UploadedFile): { valid: boolean; error?: string } {
-    // Check file size (250 KB)
-    if (file.size > 250 * 1024) {
-        return { valid: false, error: 'File size exceeds 250 KB limit' };
-    }
-
     // Check MIME type
     if (!allowedMimes.includes(file.mimetype)) {
         return { valid: false, error: 'Invalid file type. Only PDF, PNG, JPEG, JPG, and Excel files are allowed.' };

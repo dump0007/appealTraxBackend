@@ -26,36 +26,31 @@ class ProceedingValidation extends Validation {
             courtNumber: Joi.string().trim().required(),
         });
 
+        // Schema for NOTICE_OF_MOTION type only
         const noticeOfMotionSchema = Joi.object({
-            attendanceMode: Joi.string().valid('BY_FORMAT', 'BY_PERSON').allow(null, ''),
+            attendanceMode: Joi.string().valid('BY_FORMAT', 'BY_PERSON').required(),
             formatSubmitted: Joi.when('attendanceMode', {
                 is: 'BY_FORMAT',
                 then: Joi.boolean().required(),
-                otherwise: Joi.boolean().allow(null),
+                otherwise: Joi.boolean().allow(null).optional(),
             }),
-            // formatFilledBy is only required when attendanceMode is BY_FORMAT
             formatFilledBy: Joi.when('attendanceMode', {
                 is: 'BY_FORMAT',
                 then: personSchema.required(),
                 otherwise: personSchemaOptional,
             }),
-            // appearingAG is legacy - use appearingAGDetails for BY_PERSON mode
-            appearingAG: personSchemaOptional,
-            // appearingAGDetails is required only for BY_PERSON mode
+            appearingAG: personSchemaOptional, // Legacy
             appearingAGDetails: Joi.when('attendanceMode', {
                 is: 'BY_PERSON',
                 then: Joi.string().trim().required(),
                 otherwise: Joi.string().trim().allow('', null).optional(),
             }),
-            // aagDgWhoWillAppear is required only for BY_FORMAT mode
             aagDgWhoWillAppear: Joi.when('attendanceMode', {
                 is: 'BY_FORMAT',
                 then: Joi.string().trim().required(),
                 otherwise: Joi.string().trim().allow('', null).optional(),
             }),
-            // attendingOfficer is legacy - use attendingOfficerDetails for BY_PERSON mode
-            attendingOfficer: personSchemaOptional,
-            // attendingOfficerDetails is required only for BY_PERSON mode
+            attendingOfficer: personSchemaOptional, // Legacy
             attendingOfficerDetails: Joi.when('attendanceMode', {
                 is: 'BY_PERSON',
                 then: Joi.string().trim().required(),
@@ -66,29 +61,39 @@ class ProceedingValidation extends Validation {
                 then: personSchema.required(),
                 otherwise: personSchemaOptional,
             }),
-            nextDateOfHearing: Joi.alternatives().try(
-                Joi.date().allow(null),
-                Joi.string().allow('', null).custom((value, helpers) => {
-                    if (!value || value === '') return null;
-                    const date = new Date(value);
-                    return isNaN(date.getTime()) ? helpers.error('date.invalid') : date;
-                })
-            ),
+            details: Joi.string().trim().required(), // Details of proceeding
+            attachment: Joi.string().trim().allow('', null), // Filename of the attached document for this record
+        }).unknown(false);
+
+        // Schema for TO_FILE_REPLY type only
+        const toFileReplySchema = Joi.object({
             officerDeputedForReply: Joi.string().trim().allow('', null),
             vettingOfficerDetails: Joi.string().trim().allow('', null),
             replyFiled: Joi.boolean().allow(null),
-            replyFilingDate: Joi.alternatives().try(
-                Joi.date().allow(null),
-                Joi.string().allow('', null).custom((value, helpers) => {
-                    if (!value || value === '') return null;
-                    const date = new Date(value);
-                    return isNaN(date.getTime()) ? helpers.error('date.invalid') : date;
-                })
-            ),
+            replyFilingDate: Joi.when('replyFiled', {
+                is: true,
+                then: Joi.alternatives().try(
+                    Joi.date().required(),
+                    Joi.string().trim().required().custom((value, helpers) => {
+                        if (!value || value === '') {
+                            return helpers.error('any.required');
+                        }
+                        const date = new Date(value);
+                        return isNaN(date.getTime()) ? helpers.error('date.invalid') : date;
+                    })
+                ),
+                otherwise: Joi.alternatives().try(
+                    Joi.date().allow(null),
+                    Joi.string().allow('', null).custom((value, helpers) => {
+                        if (!value || value === '') return null;
+                        const date = new Date(value);
+                        return isNaN(date.getTime()) ? helpers.error('date.invalid') : date;
+                    })
+                ),
+            }),
             advocateGeneralName: Joi.string().trim().allow('', null),
             replyScrutinizedByHC: Joi.boolean().allow(null),
             investigatingOfficerName: Joi.string().trim().allow('', null),
-            // ReplyTracking fields for TO_FILE_REPLY entries (per entry)
             proceedingInCourt: Joi.string().trim().allow('', null),
             orderInShort: Joi.string().trim().allow('', null),
             nextActionablePoint: Joi.string().trim().allow('', null),
@@ -100,6 +105,7 @@ class ProceedingValidation extends Validation {
                     return isNaN(date.getTime()) ? helpers.error('date.invalid') : date;
                 })
             ),
+            attachment: Joi.string().trim().allow('', null), // Filename of the attached document for this record
         }).unknown(false);
 
         const replyTrackingSchema = Joi.object({
@@ -129,6 +135,7 @@ class ProceedingValidation extends Validation {
                     return isNaN(date.getTime()) ? helpers.error('date.invalid') : date;
                 })
             ).required(),
+            attachment: Joi.string().trim().allow('', null), // Filename of the attached document for this record
         }).unknown(false);
 
         const decisionDetailsSchema = Joi.object({
@@ -143,6 +150,7 @@ class ProceedingValidation extends Validation {
             ),
             decisionByCourt: Joi.string().trim().allow('', null),
             remarks: Joi.string().trim().allow('', null),
+            attachment: Joi.string().trim().allow('', null), // Filename of the attached document for decision details
         }).unknown(false);
 
         const anyOtherDetailsSchema = Joi.object({
@@ -154,6 +162,7 @@ class ProceedingValidation extends Validation {
             }).required(),
             appearingAGDetails: Joi.string().trim().required(),
             details: Joi.string().trim().required(),
+            attachment: Joi.string().trim().allow('', null), // Filename of the attached document for this record
         }).unknown(false);
 
         const schema: Joi.Schema = Joi.object({
@@ -168,17 +177,20 @@ class ProceedingValidation extends Validation {
             }),
             draft: Joi.boolean().default(false),
             noticeOfMotion: Joi.when('type', {
-                is: Joi.string().valid('NOTICE_OF_MOTION', 'TO_FILE_REPLY'),
+                is: 'NOTICE_OF_MOTION',
                 then: Joi.alternatives().try(
                     noticeOfMotionSchema,
                     Joi.array().items(noticeOfMotionSchema).min(1)
-                ).allow(null), // Support both single object and array
+                ).required(),
                 otherwise: Joi.optional().allow(null),
             }),
             orderOfProceedingFilename: Joi.string().trim().allow('', null),
             replyTracking: Joi.when('type', {
                 is: 'TO_FILE_REPLY',
-                then: replyTrackingSchema.allow(null),
+                then: Joi.alternatives().try(
+                    toFileReplySchema,
+                    Joi.array().items(toFileReplySchema).min(1)
+                ).required(),
                 otherwise: Joi.optional().allow(null),
             }),
             argumentDetails: Joi.when('type', {
@@ -186,7 +198,7 @@ class ProceedingValidation extends Validation {
                 then: Joi.alternatives().try(
                     argumentDetailsSchema,
                     Joi.array().items(argumentDetailsSchema).min(1)
-                ).allow(null), // Support both single object and array
+                ).required(), // Support both single object and array, required for ARGUMENT
                 otherwise: Joi.optional().allow(null),
             }),
             anyOtherDetails: Joi.when('type', {
@@ -194,7 +206,7 @@ class ProceedingValidation extends Validation {
                 then: Joi.alternatives().try(
                     anyOtherDetailsSchema,
                     Joi.array().items(anyOtherDetailsSchema).min(1)
-                ).allow(null), // Support both single object and array
+                ).required(), // Support both single object and array, required for ANY_OTHER
                 otherwise: Joi.optional().allow(null),
             }),
             decisionDetails: decisionDetailsSchema.allow(null),

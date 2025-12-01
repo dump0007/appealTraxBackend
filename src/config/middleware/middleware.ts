@@ -24,8 +24,11 @@ export function configure(app: express.Application): void {
     // express middleware
     app.use(bodyParser.urlencoded({
         extended: false,
+        limit: '200mb',
     }));
-    app.use(bodyParser.json());
+    app.use(bodyParser.json({
+        limit: '200mb',
+    }));
     // parse Cookie header and populate req.cookies with an object keyed by the cookie names.
     app.use(cookieParser());
     // returns the compression middleware
@@ -36,7 +39,7 @@ export function configure(app: express.Application): void {
     app.use(cors());
     // file upload middleware
     app.use(expressFileUpload({
-        limits: { fileSize: 250 * 1024 }, // 250 KB
+        limits: { fileSize: 200 * 1024 * 1024 }, // 200 MB
         abortOnLimit: true,
         createParentPath: true,
     }));
