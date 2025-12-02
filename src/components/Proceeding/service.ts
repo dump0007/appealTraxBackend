@@ -84,6 +84,8 @@ const ProceedingService: IProceedingService = {
             if (body.noticeOfMotion) {
                 const cleanNoticeOfMotion = (notice: any) => {
                     if (!notice) return notice;
+                    // Preserve attachment field before cleaning
+                    const attachment = notice.attachment;
                 // Clean up empty date strings (handle both Date and string types)
                     const nextDate: any = notice.nextDateOfHearing;
                 if (nextDate === null || nextDate === undefined || 
@@ -116,6 +118,11 @@ const ProceedingService: IProceedingService = {
                             notice.investigatingOfficer = undefined;
                         }
                     }
+                    // Restore attachment field after cleaning
+                    if (attachment !== undefined) {
+                        notice.attachment = attachment;
+                    }
+                    console.log(`[ProceedingService] cleanNoticeOfMotion - attachment preserved: ${attachment}`);
                     return notice;
                 };
 
@@ -130,24 +137,40 @@ const ProceedingService: IProceedingService = {
             if (body.replyTracking) {
                 if (Array.isArray(body.replyTracking)) {
                     body.replyTracking = body.replyTracking.map((entry: any) => {
+                        // Preserve attachment field before cleaning
+                        const attachment = entry.attachment;
                         if (entry.nextDateOfHearingReply === null || entry.nextDateOfHearingReply === undefined || 
                             (typeof entry.nextDateOfHearingReply === 'string' && String(entry.nextDateOfHearingReply).trim() === '')) {
                             entry.nextDateOfHearingReply = undefined;
                         }
+                        // Restore attachment field after cleaning
+                        if (attachment !== undefined) {
+                            entry.attachment = attachment;
+                        }
+                        console.log(`[ProceedingService] replyTracking entry - attachment preserved: ${attachment}`);
                         return entry;
                     });
                 } else {
+                    // Preserve attachment field before cleaning
+                    const attachment = (body.replyTracking as any).attachment;
                     const nextDate: any = (body.replyTracking as any).nextDateOfHearingReply;
                     if (nextDate === null || nextDate === undefined || 
                         (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
                         (body.replyTracking as any).nextDateOfHearingReply = undefined;
                     }
+                    // Restore attachment field after cleaning
+                    if (attachment !== undefined) {
+                        (body.replyTracking as any).attachment = attachment;
+                    }
+                    console.log(`[ProceedingService] replyTracking (single) - attachment preserved: ${attachment}`);
                 }
             }
             if (body.argumentDetails) {
                 // Handle both single object and array formats
                 if (Array.isArray(body.argumentDetails)) {
                     (body.argumentDetails as any) = body.argumentDetails.map((entry: any) => {
+                        // Preserve attachment field before cleaning
+                        const attachment = entry.attachment;
                         const nextDate: any = entry.nextDateOfHearing;
                         if (nextDate === null || nextDate === undefined || 
                             (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
@@ -159,9 +182,16 @@ const ProceedingService: IProceedingService = {
                         if (entry.argumentWith && typeof entry.argumentWith === 'string') {
                             entry.argumentWith = entry.argumentWith.trim();
                         }
+                        // Restore attachment field after cleaning
+                        if (attachment !== undefined) {
+                            entry.attachment = attachment;
+                        }
+                        console.log(`[ProceedingService] argumentDetails entry - attachment preserved: ${attachment}`);
                         return entry;
                     });
                 } else {
+                    // Preserve attachment field before cleaning
+                    const attachment = (body.argumentDetails as any).attachment;
                     const nextDate: any = (body.argumentDetails as any).nextDateOfHearing;
                     if (nextDate === null || nextDate === undefined || 
                         (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
@@ -173,15 +203,41 @@ const ProceedingService: IProceedingService = {
                     if ((body.argumentDetails as any).argumentWith && typeof (body.argumentDetails as any).argumentWith === 'string') {
                         (body.argumentDetails as any).argumentWith = (body.argumentDetails as any).argumentWith.trim();
                     }
+                    // Restore attachment field after cleaning
+                    if (attachment !== undefined) {
+                        (body.argumentDetails as any).attachment = attachment;
+                    }
+                    console.log(`[ProceedingService] argumentDetails (single) - attachment preserved: ${attachment}`);
                 }
             }
             // Clean up anyOtherDetails if present
             if (body.anyOtherDetails) {
-                // No date fields to clean up for anyOtherDetails
+                // No date fields to clean up for anyOtherDetails, but ensure attachment fields are preserved
+                if (Array.isArray(body.anyOtherDetails)) {
+                    body.anyOtherDetails = body.anyOtherDetails.map((entry: any) => {
+                        // Explicitly preserve attachment field
+                        const attachment = entry.attachment;
+                        console.log(`[ProceedingService] anyOtherDetails entry - attachment preserved: ${attachment}`);
+                        // Return entry as-is (no cleaning needed, but ensure attachment is preserved)
+                        if (attachment !== undefined && !entry.attachment) {
+                            entry.attachment = attachment;
+                        }
+                        return entry;
+                    });
+                } else {
+                    // Explicitly preserve attachment field for single object
+                    const attachment = (body.anyOtherDetails as any).attachment;
+                    console.log(`[ProceedingService] anyOtherDetails (single) - attachment preserved: ${attachment}`);
+                    if (attachment !== undefined && !(body.anyOtherDetails as any).attachment) {
+                        (body.anyOtherDetails as any).attachment = attachment;
+                    }
+                }
             }
             
             // Clean up decisionDetails if present
             if (body.decisionDetails) {
+                // Preserve attachment field before cleaning
+                const attachment = body.decisionDetails.attachment;
                 const decisionDate: any = body.decisionDetails.dateOfDecision;
                 if (decisionDate === null || decisionDate === undefined || 
                     (typeof decisionDate === 'string' && String(decisionDate).trim() === '')) {
@@ -194,12 +250,36 @@ const ProceedingService: IProceedingService = {
                 if (body.decisionDetails.remarks && typeof body.decisionDetails.remarks === 'string') {
                     body.decisionDetails.remarks = body.decisionDetails.remarks.trim();
                 }
+                // Restore attachment field after cleaning
+                if (attachment !== undefined) {
+                    body.decisionDetails.attachment = attachment;
+                }
+                console.log(`[ProceedingService] decisionDetails - attachment preserved: ${attachment}`);
             }
             
             // Ensure createdBy is set (controller should set it, but ensure it's there)
             if (!body.createdBy) {
                 body.createdBy = new Types.ObjectId();
             }
+            
+            // Debug logging: Log attachment fields before validation
+            console.log(`[ProceedingService] Before validation - noticeOfMotion attachments:`, 
+                body.noticeOfMotion ? (Array.isArray(body.noticeOfMotion) 
+                    ? body.noticeOfMotion.map((n: any) => n?.attachment).filter(Boolean)
+                    : [body.noticeOfMotion?.attachment].filter(Boolean)) : []);
+            console.log(`[ProceedingService] Before validation - replyTracking attachments:`, 
+                body.replyTracking ? (Array.isArray(body.replyTracking) 
+                    ? body.replyTracking.map((r: any) => r?.attachment).filter(Boolean)
+                    : [body.replyTracking?.attachment].filter(Boolean)) : []);
+            console.log(`[ProceedingService] Before validation - argumentDetails attachments:`, 
+                body.argumentDetails ? (Array.isArray(body.argumentDetails) 
+                    ? body.argumentDetails.map((a: any) => a?.attachment).filter(Boolean)
+                    : [body.argumentDetails?.attachment].filter(Boolean)) : []);
+            console.log(`[ProceedingService] Before validation - anyOtherDetails attachments:`, 
+                body.anyOtherDetails ? (Array.isArray(body.anyOtherDetails) 
+                    ? body.anyOtherDetails.map((a: any) => a?.attachment).filter(Boolean)
+                    : [body.anyOtherDetails?.attachment].filter(Boolean)) : []);
+            console.log(`[ProceedingService] Before validation - decisionDetails attachment:`, body.decisionDetails?.attachment);
             
             const validationPayload: any = {
                 ...body,
@@ -245,6 +325,25 @@ const ProceedingService: IProceedingService = {
             console.log(`[ProceedingService] Proceeding draft flag: ${proceeding.draft} (body.draft was: ${body.draft})`);
             console.log(`[ProceedingService] Proceeding decisionDetails:`, JSON.stringify(proceeding.decisionDetails));
             console.log(`[ProceedingService] Body decisionDetails:`, JSON.stringify(body.decisionDetails));
+            
+            // Debug logging: Log attachment fields after model creation
+            console.log(`[ProceedingService] After creation - noticeOfMotion attachments:`, 
+                proceeding.noticeOfMotion ? (Array.isArray(proceeding.noticeOfMotion) 
+                    ? proceeding.noticeOfMotion.map((n: any) => n?.attachment).filter(Boolean)
+                    : [proceeding.noticeOfMotion?.attachment].filter(Boolean)) : []);
+            console.log(`[ProceedingService] After creation - replyTracking attachments:`, 
+                proceeding.replyTracking ? (Array.isArray(proceeding.replyTracking) 
+                    ? proceeding.replyTracking.map((r: any) => r?.attachment).filter(Boolean)
+                    : [proceeding.replyTracking?.attachment].filter(Boolean)) : []);
+            console.log(`[ProceedingService] After creation - argumentDetails attachments:`, 
+                proceeding.argumentDetails ? (Array.isArray(proceeding.argumentDetails) 
+                    ? proceeding.argumentDetails.map((a: any) => a?.attachment).filter(Boolean)
+                    : [proceeding.argumentDetails?.attachment].filter(Boolean)) : []);
+            console.log(`[ProceedingService] After creation - anyOtherDetails attachments:`, 
+                proceeding.anyOtherDetails ? (Array.isArray(proceeding.anyOtherDetails) 
+                    ? proceeding.anyOtherDetails.map((a: any) => a?.attachment).filter(Boolean)
+                    : [proceeding.anyOtherDetails?.attachment].filter(Boolean)) : []);
+            console.log(`[ProceedingService] After creation - decisionDetails attachment:`, proceeding.decisionDetails?.attachment);
             
             // Update FIR status if proceeding has decisionDetails with writStatus
             // Only update for non-draft (final) proceedings
@@ -431,9 +530,9 @@ const ProceedingService: IProceedingService = {
 
             const validationPayload: any = {
                 ...body,
-                createdBy: typeof body.createdBy === 'string'
-                    ? body.createdBy
-                    : (body.createdBy as Types.ObjectId).toHexString(),
+                createdBy: typeof existingProceeding.createdBy === 'string'
+                    ? existingProceeding.createdBy
+                    : (existingProceeding.createdBy as Types.ObjectId).toHexString(),
             };
 
             const updateValidate: Joi.ValidationResult = ProceedingValidation.create(validationPayload);
@@ -457,9 +556,17 @@ const ProceedingService: IProceedingService = {
                 argumentDetails: body.argumentDetails,
                 anyOtherDetails: body.anyOtherDetails,
                 decisionDetails: body.decisionDetails,
-                attachments: body.attachments,
-                orderOfProceedingFilename: body.orderOfProceedingFilename,
             };
+
+            // Only update attachments if explicitly provided, otherwise preserve existing
+            if (body.attachments !== undefined) {
+                updateData.attachments = body.attachments;
+            }
+
+            // Only update orderOfProceedingFilename if explicitly provided, otherwise preserve existing
+            if (body.orderOfProceedingFilename !== undefined) {
+                updateData.orderOfProceedingFilename = body.orderOfProceedingFilename;
+            }
 
             // Update proceeding
             const updatedProceeding = await ProceedingModel.findOneAndUpdate(

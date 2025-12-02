@@ -414,7 +414,7 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
         parseJsonField('anyOtherDetails');
         parseJsonField('decisionDetails' as keyof IProceedingModel);
 
-        // Parse filesToDelete - comes as JSON string or array
+        // Parse filesToDelete - comes as JSON string or array (needed before preserving attachments)
         let filesToDelete: string[] = [];
         if (body.filesToDelete) {
             if (typeof body.filesToDelete === 'string') {
@@ -428,9 +428,102 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
             }
         }
 
+        // Fetch existing proceeding to preserve existing files
+        const existingProceeding = await ProceedingService.findOne(req.params.id, email);
+        if (!existingProceeding) {
+            return next(new HttpError(404, 'Proceeding not found'));
+        }
+
+        // Preserve existing attachment filenames in proceeding type entries if not being replaced
+        const preserveAttachmentInEntry = (existingEntry: any, newEntry: any, index: number) => {
+            if (existingEntry && existingEntry.attachment && (!newEntry || !newEntry.attachment)) {
+                // Only preserve if the file is not marked for deletion
+                if (!filesToDelete.includes(existingEntry.attachment)) {
+                    if (newEntry) {
+                        newEntry.attachment = existingEntry.attachment;
+                    }
+                }
+            }
+        };
+
+        // Preserve attachments in noticeOfMotion entries
+        if (body.noticeOfMotion && existingProceeding.noticeOfMotion) {
+            const existingEntries = Array.isArray(existingProceeding.noticeOfMotion) 
+                ? existingProceeding.noticeOfMotion 
+                : [existingProceeding.noticeOfMotion];
+            const newEntries = Array.isArray(body.noticeOfMotion) 
+                ? body.noticeOfMotion 
+                : [body.noticeOfMotion];
+            
+            newEntries.forEach((newEntry: any, index: number) => {
+                if (existingEntries[index]) {
+                    preserveAttachmentInEntry(existingEntries[index], newEntry, index);
+                }
+            });
+        }
+
+        // Preserve attachments in replyTracking entries
+        if (body.replyTracking && existingProceeding.replyTracking) {
+            const existingEntries = Array.isArray(existingProceeding.replyTracking) 
+                ? existingProceeding.replyTracking 
+                : [existingProceeding.replyTracking];
+            const newEntries = Array.isArray(body.replyTracking) 
+                ? body.replyTracking 
+                : [body.replyTracking];
+            
+            newEntries.forEach((newEntry: any, index: number) => {
+                if (existingEntries[index]) {
+                    preserveAttachmentInEntry(existingEntries[index], newEntry, index);
+                }
+            });
+        }
+
+        // Preserve attachments in argumentDetails entries
+        if (body.argumentDetails && existingProceeding.argumentDetails) {
+            const existingEntries = Array.isArray(existingProceeding.argumentDetails) 
+                ? existingProceeding.argumentDetails 
+                : [existingProceeding.argumentDetails];
+            const newEntries = Array.isArray(body.argumentDetails) 
+                ? body.argumentDetails 
+                : [body.argumentDetails];
+            
+            newEntries.forEach((newEntry: any, index: number) => {
+                if (existingEntries[index]) {
+                    preserveAttachmentInEntry(existingEntries[index], newEntry, index);
+                }
+            });
+        }
+
+        // Preserve attachments in anyOtherDetails entries
+        if (body.anyOtherDetails && existingProceeding.anyOtherDetails) {
+            const existingEntries = Array.isArray(existingProceeding.anyOtherDetails) 
+                ? existingProceeding.anyOtherDetails 
+                : [existingProceeding.anyOtherDetails];
+            const newEntries = Array.isArray(body.anyOtherDetails) 
+                ? body.anyOtherDetails 
+                : [body.anyOtherDetails];
+            
+            newEntries.forEach((newEntry: any, index: number) => {
+                if (existingEntries[index]) {
+                    preserveAttachmentInEntry(existingEntries[index], newEntry, index);
+                }
+            });
+        }
+
+        // Preserve attachment in decisionDetails
+        if (body.decisionDetails && existingProceeding.decisionDetails) {
+            if (existingProceeding.decisionDetails.attachment && !body.decisionDetails.attachment) {
+                // Only preserve if the file is not marked for deletion
+                if (!filesToDelete.includes(existingProceeding.decisionDetails.attachment)) {
+                    body.decisionDetails.attachment = existingProceeding.decisionDetails.attachment;
+                }
+            }
+        }
+
         // Handle file uploads (similar to create)
         let orderOfProceedingFilename: string | undefined;
-        const attachments: Array<{ fileName: string; fileUrl: string }> = [];
+        // Start with existing attachments, will merge with new ones
+        const attachments: Array<{ fileName: string; fileUrl: string }> = existingProceeding.attachments ? [...existingProceeding.attachments] : [];
 
         // Handle orderOfProceeding file
         if (req.files && req.files.orderOfProceeding) {
@@ -630,14 +723,30 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
             }
         }
 
-        // Add filename to body
+        // Add filename to body (only if new file uploaded, otherwise preserve existing)
         if (orderOfProceedingFilename) {
             body.orderOfProceedingFilename = orderOfProceedingFilename;
+        } else if (existingProceeding.orderOfProceedingFilename) {
+            // Preserve existing orderOfProceedingFilename if no new file uploaded and not marked for deletion
+            if (!filesToDelete.includes(existingProceeding.orderOfProceedingFilename)) {
+                body.orderOfProceedingFilename = existingProceeding.orderOfProceedingFilename;
+            }
         }
 
-        // Add attachments to body
+        // Merge existing attachments with new ones, or preserve existing if no new attachments
+        // Filter out deleted files from preserved attachments
         if (attachments.length > 0) {
-            body.attachments = attachments;
+            // Remove deleted files from attachments array
+            body.attachments = attachments.filter(att => {
+                const filename = att.fileUrl.replace('/assets/proceedings/', '');
+                return !filesToDelete.includes(filename);
+            });
+        } else if (existingProceeding.attachments && existingProceeding.attachments.length > 0) {
+            // Preserve existing attachments if no new attachments uploaded, but filter out deleted ones
+            body.attachments = existingProceeding.attachments.filter(att => {
+                const filename = att.fileUrl.replace('/assets/proceedings/', '');
+                return !filesToDelete.includes(filename);
+            });
         }
 
         const item: IProceedingModel = await ProceedingService.update(req.params.id, body, email, filesToDelete);
