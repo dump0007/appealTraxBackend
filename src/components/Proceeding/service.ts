@@ -295,6 +295,221 @@ const ProceedingService: IProceedingService = {
         }
     },
 
+    async update(id: string, body: IProceedingModel, email: string, filesToDelete?: string[]): Promise<IProceedingModel> {
+        try {
+            const validate: Joi.ValidationResult = ProceedingValidation.byId({ id });
+            if (validate.error) {
+                throw new Error(validate.error.message);
+            }
+
+            // Find existing proceeding
+            const existingProceeding = await ProceedingModel.findOne({ _id: new Types.ObjectId(id), email });
+            if (!existingProceeding) {
+                throw new Error('Proceeding not found or access denied');
+            }
+
+            // Verify FIR is completed (has non-draft proceedings)
+            const FIRModel = (await import('../FIR/model')).default;
+            const fir = await FIRModel.findOne({ _id: existingProceeding.fir, email });
+            if (!fir) {
+                throw new Error('FIR not found or access denied');
+            }
+
+            // Check if FIR has completed proceedings
+            const allProceedings = await ProceedingModel.find({ fir: existingProceeding.fir, email, draft: false });
+            const hasCompletedProceedings = allProceedings.length > 0 && allProceedings.some(p => !p.draft);
+            if (!hasCompletedProceedings) {
+                throw new Error('Cannot edit proceeding: FIR must be fully completed before editing');
+            }
+
+            // Clean up empty date strings and empty objects before validation (same as insert)
+            if (body.noticeOfMotion) {
+                const cleanNoticeOfMotion = (notice: any) => {
+                    if (!notice) return notice;
+                    const nextDate: any = notice.nextDateOfHearing;
+                    if (nextDate === null || nextDate === undefined || 
+                        (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
+                        notice.nextDateOfHearing = undefined;
+                    }
+                    const replyDate: any = notice.replyFilingDate;
+                    if (replyDate === null || replyDate === undefined || 
+                        (typeof replyDate === 'string' && String(replyDate).trim() === '')) {
+                        notice.replyFilingDate = undefined;
+                    }
+                    if (notice.formatFilledBy) {
+                        if (!notice.formatFilledBy.name || notice.formatFilledBy.name.trim() === '') {
+                            notice.formatFilledBy = undefined;
+                        }
+                    }
+                    if (notice.appearingAG) {
+                        if (!notice.appearingAG.name || notice.appearingAG.name.trim() === '') {
+                            notice.appearingAG = undefined;
+                        }
+                    }
+                    if (notice.attendingOfficer) {
+                        if (!notice.attendingOfficer.name || notice.attendingOfficer.name.trim() === '') {
+                            notice.attendingOfficer = undefined;
+                        }
+                    }
+                    if (notice.investigatingOfficer) {
+                        if (!notice.investigatingOfficer.name || notice.investigatingOfficer.name.trim() === '') {
+                            notice.investigatingOfficer = undefined;
+                        }
+                    }
+                    return notice;
+                };
+
+                if (Array.isArray(body.noticeOfMotion)) {
+                    body.noticeOfMotion = body.noticeOfMotion.map(cleanNoticeOfMotion);
+                } else {
+                    body.noticeOfMotion = cleanNoticeOfMotion(body.noticeOfMotion);
+                }
+            }
+
+            if (body.replyTracking) {
+                if (Array.isArray(body.replyTracking)) {
+                    body.replyTracking = body.replyTracking.map((entry: any) => {
+                        if (entry.nextDateOfHearingReply === null || entry.nextDateOfHearingReply === undefined || 
+                            (typeof entry.nextDateOfHearingReply === 'string' && String(entry.nextDateOfHearingReply).trim() === '')) {
+                            entry.nextDateOfHearingReply = undefined;
+                        }
+                        return entry;
+                    });
+                } else {
+                    const nextDate: any = (body.replyTracking as any).nextDateOfHearingReply;
+                    if (nextDate === null || nextDate === undefined || 
+                        (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
+                        (body.replyTracking as any).nextDateOfHearingReply = undefined;
+                    }
+                }
+            }
+
+            if (body.argumentDetails) {
+                if (Array.isArray(body.argumentDetails)) {
+                    (body.argumentDetails as any) = body.argumentDetails.map((entry: any) => {
+                        const nextDate: any = entry.nextDateOfHearing;
+                        if (nextDate === null || nextDate === undefined || 
+                            (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
+                            entry.nextDateOfHearing = undefined;
+                        }
+                        if (entry.argumentBy && typeof entry.argumentBy === 'string') {
+                            entry.argumentBy = entry.argumentBy.trim();
+                        }
+                        if (entry.argumentWith && typeof entry.argumentWith === 'string') {
+                            entry.argumentWith = entry.argumentWith.trim();
+                        }
+                        return entry;
+                    });
+                } else {
+                    const nextDate: any = (body.argumentDetails as any).nextDateOfHearing;
+                    if (nextDate === null || nextDate === undefined || 
+                        (typeof nextDate === 'string' && String(nextDate).trim() === '')) {
+                        (body.argumentDetails as any).nextDateOfHearing = undefined;
+                    }
+                    if ((body.argumentDetails as any).argumentBy && typeof (body.argumentDetails as any).argumentBy === 'string') {
+                        (body.argumentDetails as any).argumentBy = (body.argumentDetails as any).argumentBy.trim();
+                    }
+                    if ((body.argumentDetails as any).argumentWith && typeof (body.argumentDetails as any).argumentWith === 'string') {
+                        (body.argumentDetails as any).argumentWith = (body.argumentDetails as any).argumentWith.trim();
+                    }
+                }
+            }
+
+            if (body.decisionDetails) {
+                const decisionDate: any = body.decisionDetails.dateOfDecision;
+                if (decisionDate === null || decisionDate === undefined || 
+                    (typeof decisionDate === 'string' && String(decisionDate).trim() === '')) {
+                    body.decisionDetails.dateOfDecision = undefined;
+                }
+                if (body.decisionDetails.decisionByCourt && typeof body.decisionDetails.decisionByCourt === 'string') {
+                    body.decisionDetails.decisionByCourt = body.decisionDetails.decisionByCourt.trim();
+                }
+                if (body.decisionDetails.remarks && typeof body.decisionDetails.remarks === 'string') {
+                    body.decisionDetails.remarks = body.decisionDetails.remarks.trim();
+                }
+            }
+
+            const validationPayload: any = {
+                ...body,
+                createdBy: typeof body.createdBy === 'string'
+                    ? body.createdBy
+                    : (body.createdBy as Types.ObjectId).toHexString(),
+            };
+
+            const updateValidate: Joi.ValidationResult = ProceedingValidation.create(validationPayload);
+            if (updateValidate.error) {
+                throw new Error(updateValidate.error.message);
+            }
+
+            // Verify the FIR belongs to this user
+            if (!fir) {
+                throw new Error('FIR not found or access denied');
+            }
+
+            // Don't update email, fir, sequence, or createdBy
+            const updateData: any = {
+                type: body.type,
+                summary: body.summary,
+                details: body.details,
+                hearingDetails: body.hearingDetails,
+                noticeOfMotion: body.noticeOfMotion,
+                replyTracking: body.replyTracking,
+                argumentDetails: body.argumentDetails,
+                anyOtherDetails: body.anyOtherDetails,
+                decisionDetails: body.decisionDetails,
+                attachments: body.attachments,
+                orderOfProceedingFilename: body.orderOfProceedingFilename,
+            };
+
+            // Update proceeding
+            const updatedProceeding = await ProceedingModel.findOneAndUpdate(
+                { _id: new Types.ObjectId(id), email },
+                updateData,
+                { new: true, runValidators: true }
+            );
+
+            if (!updatedProceeding) {
+                throw new Error('Proceeding not found or access denied');
+            }
+
+            // Delete old files if provided
+            if (filesToDelete && filesToDelete.length > 0) {
+                const { deleteProceedingFile } = await import('../../config/middleware/fileUpload');
+                for (const filename of filesToDelete) {
+                    try {
+                        deleteProceedingFile(filename);
+                        console.log(`[ProceedingService] Deleted file: ${filename}`);
+                    } catch (fileError) {
+                        console.error(`[ProceedingService] Error deleting file ${filename}:`, fileError);
+                        // Don't throw - file deletion failure shouldn't fail the update
+                    }
+                }
+            }
+
+            // Update FIR status if proceeding has decisionDetails with writStatus
+            const writStatus = body.decisionDetails?.writStatus;
+            const hasWritStatus = writStatus && 
+                                  (typeof writStatus === 'string' ? writStatus.trim() !== '' : true);
+
+            if (body.decisionDetails && hasWritStatus) {
+                try {
+                    const updateResult = await FIRModel.updateOne(
+                        { _id: existingProceeding.fir, email },
+                        { $set: { status: writStatus } }
+                    );
+                    console.log(`[ProceedingService] Updated FIR ${existingProceeding.fir} status to ${writStatus}. Matched: ${updateResult.matchedCount}, Modified: ${updateResult.modifiedCount}`);
+                } catch (updateError) {
+                    console.error(`[ProceedingService] Error updating FIR status:`, updateError);
+                    // Don't throw - proceeding was updated successfully, just log the error
+                }
+            }
+
+            return updatedProceeding;
+        } catch (error) {
+            throw new Error(error.message);
+        }
+    },
+
     async remove(id: string, email: string): Promise<IProceedingModel> {
         try {
             const validate: Joi.ValidationResult = ProceedingValidation.byId({ id });

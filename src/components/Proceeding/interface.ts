@@ -6,6 +6,7 @@ export interface IProceedingService {
     findOne(id: string, email: string): Promise<IProceedingModel>;
     findDraftByFIR(firId: string, email: string): Promise<IProceedingModel | null>;
     insert(body: IProceedingModel, email: string): Promise<IProceedingModel>;
+    update(id: string, body: IProceedingModel, email: string, filesToDelete?: string[]): Promise<IProceedingModel>;
     remove(id: string, email: string): Promise<IProceedingModel>;
 }
 

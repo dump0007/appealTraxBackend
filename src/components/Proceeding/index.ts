@@ -377,6 +377,276 @@ export async function findDraftByFIR(req: RequestWithUser, res: Response, next: 
     }
 }
 
+export async function update(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const email = req.email || (req.user as any)?.email;
+        if (!email) {
+            return next(new HttpError(401, 'User email not found in token'));
+        }
+
+        // Parse body - handle both JSON and form-data
+        let body: any;
+        if (typeof req.body === 'string') {
+            try {
+                body = JSON.parse(req.body);
+            } catch {
+                body = req.body;
+            }
+        } else {
+            body = req.body;
+        }
+
+        // Parse JSON string fields
+        const parseJsonField = (fieldName: keyof IProceedingModel) => {
+            if (body[fieldName] && typeof body[fieldName] === 'string') {
+                try {
+                    body[fieldName] = JSON.parse(body[fieldName]);
+                } catch {
+                    // Keep as is if parsing fails
+                }
+            }
+        };
+
+        parseJsonField('hearingDetails');
+        parseJsonField('noticeOfMotion' as keyof IProceedingModel);
+        parseJsonField('replyTracking');
+        parseJsonField('argumentDetails');
+        parseJsonField('anyOtherDetails');
+        parseJsonField('decisionDetails' as keyof IProceedingModel);
+
+        // Parse filesToDelete - comes as JSON string or array
+        let filesToDelete: string[] = [];
+        if (body.filesToDelete) {
+            if (typeof body.filesToDelete === 'string') {
+                try {
+                    filesToDelete = JSON.parse(body.filesToDelete);
+                } catch {
+                    filesToDelete = [];
+                }
+            } else if (Array.isArray(body.filesToDelete)) {
+                filesToDelete = body.filesToDelete;
+            }
+        }
+
+        // Handle file uploads (similar to create)
+        let orderOfProceedingFilename: string | undefined;
+        const attachments: Array<{ fileName: string; fileUrl: string }> = [];
+
+        // Handle orderOfProceeding file
+        if (req.files && req.files.orderOfProceeding) {
+            const file = Array.isArray(req.files.orderOfProceeding) 
+                ? req.files.orderOfProceeding[0] 
+                : req.files.orderOfProceeding;
+            
+            const validation = validateProceedingFile(file);
+            if (!validation.valid) {
+                return next(new HttpError(400, validation.error || 'Invalid file'));
+            }
+
+            try {
+                orderOfProceedingFilename = await saveProceedingFile(file);
+            } catch (error) {
+                return next(new HttpError(500, `Failed to save file: ${error.message}`));
+            }
+        }
+
+        // Handle attachment files for all proceeding types (same as create)
+        if (req.files) {
+            // Process Notice of Motion attachments
+            const noticeOfMotionFiles = Object.keys(req.files).filter(key => 
+                key.startsWith('attachments_noticeOfMotion_')
+            );
+            for (const key of noticeOfMotionFiles) {
+                const fileObj = req.files[key];
+                const file = Array.isArray(fileObj) ? fileObj[0] : fileObj;
+                
+                const validation = validateProceedingFile(file);
+                if (!validation.valid) {
+                    return next(new HttpError(400, validation.error || `Invalid file: ${key}`));
+                }
+
+                try {
+                    const filename = await saveProceedingFile(file);
+                    attachments.push({
+                        fileName: file.name,
+                        fileUrl: `/assets/proceedings/${filename}`
+                    });
+                    
+                    const indexMatch = key.match(/attachments_noticeOfMotion_(\d+)/);
+                    if (indexMatch) {
+                        const index = parseInt(indexMatch[1], 10);
+                        if (body.noticeOfMotion) {
+                            if (Array.isArray(body.noticeOfMotion)) {
+                                if (body.noticeOfMotion[index]) {
+                                    body.noticeOfMotion[index].attachment = filename;
+                                }
+                            } else if (index === 0) {
+                                body.noticeOfMotion.attachment = filename;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    return next(new HttpError(500, `Failed to save file ${key}: ${error.message}`));
+                }
+            }
+
+            // Process To File Reply attachments
+            const replyTrackingFiles = Object.keys(req.files).filter(key => 
+                key.startsWith('attachments_replyTracking_')
+            );
+            for (const key of replyTrackingFiles) {
+                const fileObj = req.files[key];
+                const file = Array.isArray(fileObj) ? fileObj[0] : fileObj;
+                
+                const validation = validateProceedingFile(file);
+                if (!validation.valid) {
+                    return next(new HttpError(400, validation.error || `Invalid file: ${key}`));
+                }
+
+                try {
+                    const filename = await saveProceedingFile(file);
+                    attachments.push({
+                        fileName: file.name,
+                        fileUrl: `/assets/proceedings/${filename}`
+                    });
+                    
+                    const indexMatch = key.match(/attachments_replyTracking_(\d+)/);
+                    if (indexMatch) {
+                        const index = parseInt(indexMatch[1], 10);
+                        if (body.replyTracking) {
+                            if (Array.isArray(body.replyTracking)) {
+                                if (body.replyTracking[index]) {
+                                    body.replyTracking[index].attachment = filename;
+                                }
+                            } else if (index === 0) {
+                                body.replyTracking.attachment = filename;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    return next(new HttpError(500, `Failed to save file ${key}: ${error.message}`));
+                }
+            }
+
+            // Process Argument attachments
+            const argumentFiles = Object.keys(req.files).filter(key => 
+                key.startsWith('attachments_argumentDetails_')
+            );
+            for (const key of argumentFiles) {
+                const fileObj = req.files[key];
+                const file = Array.isArray(fileObj) ? fileObj[0] : fileObj;
+                
+                const validation = validateProceedingFile(file);
+                if (!validation.valid) {
+                    return next(new HttpError(400, validation.error || `Invalid file: ${key}`));
+                }
+
+                try {
+                    const filename = await saveProceedingFile(file);
+                    attachments.push({
+                        fileName: file.name,
+                        fileUrl: `/assets/proceedings/${filename}`
+                    });
+                    
+                    const indexMatch = key.match(/attachments_argumentDetails_(\d+)/);
+                    if (indexMatch) {
+                        const index = parseInt(indexMatch[1], 10);
+                        if (body.argumentDetails) {
+                            if (Array.isArray(body.argumentDetails)) {
+                                if (body.argumentDetails[index]) {
+                                    body.argumentDetails[index].attachment = filename;
+                                }
+                            } else if (index === 0) {
+                                body.argumentDetails.attachment = filename;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    return next(new HttpError(500, `Failed to save file ${key}: ${error.message}`));
+                }
+            }
+
+            // Process Any Other attachments
+            const anyOtherFiles = Object.keys(req.files).filter(key => 
+                key.startsWith('attachments_anyOtherDetails_')
+            );
+            for (const key of anyOtherFiles) {
+                const fileObj = req.files[key];
+                const file = Array.isArray(fileObj) ? fileObj[0] : fileObj;
+                
+                const validation = validateProceedingFile(file);
+                if (!validation.valid) {
+                    return next(new HttpError(400, validation.error || `Invalid file: ${key}`));
+                }
+
+                try {
+                    const filename = await saveProceedingFile(file);
+                    attachments.push({
+                        fileName: file.name,
+                        fileUrl: `/assets/proceedings/${filename}`
+                    });
+                    
+                    const indexMatch = key.match(/attachments_anyOtherDetails_(\d+)/);
+                    if (indexMatch) {
+                        const index = parseInt(indexMatch[1], 10);
+                        if (body.anyOtherDetails) {
+                            if (Array.isArray(body.anyOtherDetails)) {
+                                if (body.anyOtherDetails[index]) {
+                                    body.anyOtherDetails[index].attachment = filename;
+                                }
+                            } else if (index === 0) {
+                                body.anyOtherDetails.attachment = filename;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    return next(new HttpError(500, `Failed to save file ${key}: ${error.message}`));
+                }
+            }
+
+            // Process Decision Details attachment
+            if (req.files.attachments_decisionDetails) {
+                const fileObj = req.files.attachments_decisionDetails;
+                const file = Array.isArray(fileObj) ? fileObj[0] : fileObj;
+                
+                const validation = validateProceedingFile(file);
+                if (!validation.valid) {
+                    return next(new HttpError(400, validation.error || 'Invalid decision details file'));
+                }
+
+                try {
+                    const filename = await saveProceedingFile(file);
+                    attachments.push({
+                        fileName: file.name,
+                        fileUrl: `/assets/proceedings/${filename}`
+                    });
+                    
+                    if (body.decisionDetails) {
+                        body.decisionDetails.attachment = filename;
+                    }
+                } catch (error) {
+                    return next(new HttpError(500, `Failed to save decision details file: ${error.message}`));
+                }
+            }
+        }
+
+        // Add filename to body
+        if (orderOfProceedingFilename) {
+            body.orderOfProceedingFilename = orderOfProceedingFilename;
+        }
+
+        // Add attachments to body
+        if (attachments.length > 0) {
+            body.attachments = attachments;
+        }
+
+        const item: IProceedingModel = await ProceedingService.update(req.params.id, body, email, filesToDelete);
+        res.status(200).json(item);
+    } catch (error) {
+        next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
+    }
+}
+
 export async function remove(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
         const email = req.email || (req.user as any)?.email;
