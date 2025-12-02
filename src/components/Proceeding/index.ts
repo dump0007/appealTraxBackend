@@ -524,6 +524,9 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
         let orderOfProceedingFilename: string | undefined;
         // Start with existing attachments, will merge with new ones
         const attachments: Array<{ fileName: string; fileUrl: string }> = existingProceeding.attachments ? [...existingProceeding.attachments] : [];
+        
+        // Track filenames that are being replaced (so we can remove old ones from attachments)
+        const replacedFilenames: string[] = [];
 
         // Handle orderOfProceeding file
         if (req.files && req.files.orderOfProceeding) {
@@ -538,6 +541,10 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
 
             try {
                 orderOfProceedingFilename = await saveProceedingFile(file);
+                // If replacing orderOfProceeding, mark old filename for removal from attachments
+                if (existingProceeding.orderOfProceedingFilename) {
+                    replacedFilenames.push(existingProceeding.orderOfProceedingFilename);
+                }
             } catch (error) {
                 return next(new HttpError(500, `Failed to save file: ${error.message}`));
             }
@@ -569,6 +576,15 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
                     if (indexMatch) {
                         const index = parseInt(indexMatch[1], 10);
                         if (body.noticeOfMotion) {
+                            const existingEntries = Array.isArray(existingProceeding.noticeOfMotion) 
+                                ? existingProceeding.noticeOfMotion 
+                                : [existingProceeding.noticeOfMotion];
+                            
+                            // If replacing an existing attachment, mark old filename for removal
+                            if (existingEntries[index] && existingEntries[index].attachment) {
+                                replacedFilenames.push(existingEntries[index].attachment);
+                            }
+                            
                             if (Array.isArray(body.noticeOfMotion)) {
                                 if (body.noticeOfMotion[index]) {
                                     body.noticeOfMotion[index].attachment = filename;
@@ -607,6 +623,15 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
                     if (indexMatch) {
                         const index = parseInt(indexMatch[1], 10);
                         if (body.replyTracking) {
+                            const existingEntries = Array.isArray(existingProceeding.replyTracking) 
+                                ? existingProceeding.replyTracking 
+                                : [existingProceeding.replyTracking];
+                            
+                            // If replacing an existing attachment, mark old filename for removal
+                            if (existingEntries[index] && existingEntries[index].attachment) {
+                                replacedFilenames.push(existingEntries[index].attachment);
+                            }
+                            
                             if (Array.isArray(body.replyTracking)) {
                                 if (body.replyTracking[index]) {
                                     body.replyTracking[index].attachment = filename;
@@ -645,6 +670,15 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
                     if (indexMatch) {
                         const index = parseInt(indexMatch[1], 10);
                         if (body.argumentDetails) {
+                            const existingEntries = Array.isArray(existingProceeding.argumentDetails) 
+                                ? existingProceeding.argumentDetails 
+                                : [existingProceeding.argumentDetails];
+                            
+                            // If replacing an existing attachment, mark old filename for removal
+                            if (existingEntries[index] && existingEntries[index].attachment) {
+                                replacedFilenames.push(existingEntries[index].attachment);
+                            }
+                            
                             if (Array.isArray(body.argumentDetails)) {
                                 if (body.argumentDetails[index]) {
                                     body.argumentDetails[index].attachment = filename;
@@ -683,6 +717,15 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
                     if (indexMatch) {
                         const index = parseInt(indexMatch[1], 10);
                         if (body.anyOtherDetails) {
+                            const existingEntries = Array.isArray(existingProceeding.anyOtherDetails) 
+                                ? existingProceeding.anyOtherDetails 
+                                : [existingProceeding.anyOtherDetails];
+                            
+                            // If replacing an existing attachment, mark old filename for removal
+                            if (existingEntries[index] && existingEntries[index].attachment) {
+                                replacedFilenames.push(existingEntries[index].attachment);
+                            }
+                            
                             if (Array.isArray(body.anyOtherDetails)) {
                                 if (body.anyOtherDetails[index]) {
                                     body.anyOtherDetails[index].attachment = filename;
@@ -714,6 +757,11 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
                         fileUrl: `/assets/proceedings/${filename}`
                     });
                     
+                    // If replacing an existing decision details attachment, mark old filename for removal
+                    if (existingProceeding.decisionDetails && existingProceeding.decisionDetails.attachment) {
+                        replacedFilenames.push(existingProceeding.decisionDetails.attachment);
+                    }
+                    
                     if (body.decisionDetails) {
                         body.decisionDetails.attachment = filename;
                     }
@@ -734,18 +782,19 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
         }
 
         // Merge existing attachments with new ones, or preserve existing if no new attachments
-        // Filter out deleted files from preserved attachments
+        // Filter out deleted files and replaced files from preserved attachments
+        const allFilesToRemove = [...filesToDelete, ...replacedFilenames];
         if (attachments.length > 0) {
-            // Remove deleted files from attachments array
+            // Remove deleted files and replaced files from attachments array
             body.attachments = attachments.filter(att => {
                 const filename = att.fileUrl.replace('/assets/proceedings/', '');
-                return !filesToDelete.includes(filename);
+                return !allFilesToRemove.includes(filename);
             });
         } else if (existingProceeding.attachments && existingProceeding.attachments.length > 0) {
-            // Preserve existing attachments if no new attachments uploaded, but filter out deleted ones
+            // Preserve existing attachments if no new attachments uploaded, but filter out deleted and replaced ones
             body.attachments = existingProceeding.attachments.filter(att => {
                 const filename = att.fileUrl.replace('/assets/proceedings/', '');
-                return !filesToDelete.includes(filename);
+                return !allFilesToRemove.includes(filename);
             });
         }
 
