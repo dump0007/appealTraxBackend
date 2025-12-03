@@ -9,7 +9,7 @@ export type WritType =
     | 'QUASHING'
     | 'DIRECTION'
     | 'SUSPENSION_OF_SENTENCE'
-    | 'PAYROLL'
+    | 'PAROLE'
     | 'ANY_OTHER';
 
 export type BailSubType = 'ANTICIPATORY' | 'REGULAR';
@@ -90,7 +90,7 @@ const FIRSchema: Schema<IFIRModel> = new Schema({
     writNumber: { type: String, required: true, trim: true },
     writType: {
         type: String,
-        enum: ['BAIL', 'QUASHING', 'DIRECTION', 'SUSPENSION_OF_SENTENCE', 'PAYROLL', 'ANY_OTHER'],
+        enum: ['BAIL', 'QUASHING', 'DIRECTION', 'SUSPENSION_OF_SENTENCE', 'PAROLE', 'ANY_OTHER'],
         required: true,
     },
     writYear: { type: Number, min: 1900, max: 3000, required: true },

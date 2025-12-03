@@ -8,7 +8,7 @@ class FIRValidation extends Validation {
     }
 
     create(body: IFIRModel): Joi.ValidationResult {
-        const WRIT_TYPES = ['BAIL', 'QUASHING', 'DIRECTION', 'SUSPENSION_OF_SENTENCE', 'PAYROLL', 'ANY_OTHER'];
+        const WRIT_TYPES = ['BAIL', 'QUASHING', 'DIRECTION', 'SUSPENSION_OF_SENTENCE', 'PAROLE', 'ANY_OTHER'];
         const BAIL_SUB_TYPES = ['ANTICIPATORY', 'REGULAR'];
 
         const respondentSchema = Joi.object({
