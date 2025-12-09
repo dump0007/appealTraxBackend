@@ -114,3 +114,16 @@ export async function search(req: RequestWithUser, res: Response, next: NextFunc
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
     }
 }
+
+export async function writTypeDistribution(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const email = req.email || (req.user as any)?.email;
+        if (!email) {
+            return next(new HttpError(401, 'User email not found in token'));
+        }
+        const distribution = await FIRService.writTypeDistribution(email);
+        res.status(200).json(distribution);
+    } catch (error) {
+        next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
+    }
+}

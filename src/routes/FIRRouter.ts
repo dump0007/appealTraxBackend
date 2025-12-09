@@ -7,6 +7,7 @@ router.get('/', FIRComponent.findAll);
 router.get('/search', FIRComponent.search);
 router.get('/dash', FIRComponent.dashboard);
 router.get('/graph', FIRComponent.cityGraph);
+router.get('/writ-type-distribution', FIRComponent.writTypeDistribution);
 
 router.post('/', FIRComponent.create);
 

@@ -9,6 +9,7 @@ export interface IFIRService {
     dashboard(email: string): Promise<any>;
     cityGraph(email: string): Promise<any>;
     search(query: string, email: string): Promise<IFIRModel[]>;
+    writTypeDistribution(email: string): Promise<Array<{ type: string, count: number }>>;
 }
 
 

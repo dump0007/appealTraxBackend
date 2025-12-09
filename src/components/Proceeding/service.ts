@@ -632,6 +632,94 @@ const ProceedingService: IProceedingService = {
             throw new Error(error.message);
         }
     },
+
+    async motionMetrics(email: string): Promise<{ filed: number, pending: number, overdue: number }> {
+        try {
+            const now = new Date();
+            
+            // Get all filed motions (draft: false AND type: 'NOTICE_OF_MOTION')
+            const filedMotions = await ProceedingModel.find({
+                email,
+                type: 'NOTICE_OF_MOTION',
+                draft: false
+            });
+
+            let pending = 0;
+            let overdue = 0;
+
+            // For each filed motion, check hearing date
+            for (const motion of filedMotions) {
+                if (motion.hearingDetails && motion.hearingDetails.dateOfHearing) {
+                    const hearingDate = new Date(motion.hearingDetails.dateOfHearing);
+                    if (hearingDate > now) {
+                        pending++;
+                    } else if (hearingDate < now) {
+                        overdue++;
+                    }
+                }
+            }
+
+            return {
+                filed: filedMotions.length,
+                pending,
+                overdue
+            };
+        } catch (error) {
+            throw new Error(error.message);
+        }
+    },
+
+    async affidavitMetrics(email: string): Promise<{ filed: number, pending: number, overdue: number }> {
+        try {
+            const now = new Date();
+            
+            // Get all filed affidavits (draft: false AND type: 'TO_FILE_REPLY')
+            const filedAffidavits = await ProceedingModel.find({
+                email,
+                type: 'TO_FILE_REPLY',
+                draft: false
+            });
+
+            let pending = 0;
+            let overdue = 0;
+
+            // For each filed affidavit, check hearing date
+            for (const affidavit of filedAffidavits) {
+                let hearingDate: Date | null = null;
+                
+                // Check replyTracking.nextDateOfHearingReply first (specific to TO_FILE_REPLY)
+                if (affidavit.replyTracking) {
+                    const replyTracking = Array.isArray(affidavit.replyTracking) 
+                        ? affidavit.replyTracking[0] 
+                        : affidavit.replyTracking;
+                    if (replyTracking && replyTracking.nextDateOfHearingReply) {
+                        hearingDate = new Date(replyTracking.nextDateOfHearingReply);
+                    }
+                }
+                
+                // Fallback to hearingDetails.dateOfHearing if nextDateOfHearingReply is not available
+                if (!hearingDate && affidavit.hearingDetails && affidavit.hearingDetails.dateOfHearing) {
+                    hearingDate = new Date(affidavit.hearingDetails.dateOfHearing);
+                }
+                
+                if (hearingDate) {
+                    if (hearingDate > now) {
+                        pending++;
+                    } else if (hearingDate < now) {
+                        overdue++;
+                    }
+                }
+            }
+
+            return {
+                filed: filedAffidavits.length,
+                pending,
+                overdue
+            };
+        } catch (error) {
+            throw new Error(error.message);
+        }
+    },
 };
 
 export default ProceedingService;

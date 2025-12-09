@@ -313,6 +313,40 @@ const FIRService: IFIRService = {
             throw new Error(error.message);
         }
     },
+
+    async writTypeDistribution(email: string): Promise<Array<{ type: string, count: number }>> {
+        try {
+            const allWritTypes = ['BAIL', 'QUASHING', 'DIRECTION', 'SUSPENSION_OF_SENTENCE', 'PAROLE', 'ANY_OTHER'];
+            
+            const distribution = await FIRModel.aggregate([
+                { $match: { email } }, // Filter by user email
+                {
+                    $group: {
+                        _id: '$writType',
+                        count: { $sum: 1 }
+                    }
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        type: '$_id',
+                        count: 1
+                    }
+                }
+            ]);
+
+            // Create a map for quick lookup
+            const distributionMap = new Map(distribution.map(item => [item.type, item.count]));
+
+            // Return all writ types with their counts (0 if not present)
+            return allWritTypes.map(type => ({
+                type,
+                count: distributionMap.get(type) || 0
+            }));
+        } catch (error) {
+            throw new Error(error.message);
+        }
+    },
 };
 
 export default FIRService;

@@ -818,4 +818,30 @@ export async function remove(req: RequestWithUser, res: Response, next: NextFunc
     }
 }
 
+export async function motionMetrics(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const email = req.email || (req.user as any)?.email;
+        if (!email) {
+            return next(new HttpError(401, 'User email not found in token'));
+        }
+        const metrics = await ProceedingService.motionMetrics(email);
+        res.status(200).json(metrics);
+    } catch (error) {
+        next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
+    }
+}
+
+export async function affidavitMetrics(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const email = req.email || (req.user as any)?.email;
+        if (!email) {
+            return next(new HttpError(401, 'User email not found in token'));
+        }
+        const metrics = await ProceedingService.affidavitMetrics(email);
+        res.status(200).json(metrics);
+    } catch (error) {
+        next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
+    }
+}
+
 
