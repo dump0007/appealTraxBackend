@@ -6,7 +6,6 @@ import ProceedingModel, { IProceedingModel } from '../Proceeding/model';
 import AuditLogModel, { IAuditLogModel } from '../AuditLog/model';
 import ConfigModel, { IConfigModel } from '../Config/model';
 import { IAdminService } from './interface';
-import * as bcrypt from 'bcrypt';
 
 const AdminService: IAdminService = {
     async getAllUsers(): Promise<IUserModel[]> {
@@ -41,13 +40,10 @@ const AdminService: IAdminService = {
                 throw new Error('User with this email already exists');
             }
 
-            // Hash password
-            const salt = await bcrypt.genSalt(10);
-            const hashedPassword = await bcrypt.hash(userData.password, salt);
-
+            // Create user with plain password - User model's pre-save hook will hash it
             const user = new UserModel({
                 email: userData.email,
-                password: hashedPassword,
+                password: userData.password, // Plain password - pre-save hook will hash it
                 role: userData.role || 'USER',
                 branch: userData.branch || '',
             });
@@ -89,10 +85,9 @@ const AdminService: IAdminService = {
             if (userData.role !== undefined) user.role = userData.role;
             if (userData.branch !== undefined) user.branch = userData.branch;
 
-            // Handle password update
+            // Handle password update - set plain password, pre-save hook will hash it
             if (userData.password) {
-                const salt = await bcrypt.genSalt(10);
-                user.password = await bcrypt.hash(userData.password, salt);
+                user.password = userData.password; // Plain password - pre-save hook will hash it
             }
 
             return await user.save();
