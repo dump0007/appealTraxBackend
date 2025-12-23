@@ -28,16 +28,37 @@ const FIRService: IFIRService = {
             if (validate.error) {
                 throw new Error(validate.error.message);
             }
-            const fir = await FIRModel.findOne({ _id: new Types.ObjectId(id), email });
-            if (!fir) {
-                throw new Error('FIR not found or access denied');
+            
+            // Check if user is admin
+            const UserModel = (await import('../User/model')).default;
+            const user = await UserModel.findOne({ email });
+            const isAdmin = user && user.role === 'ADMIN';
+            
+            let fir;
+            if (isAdmin) {
+                // Admin can view any FIR
+                fir = await FIRModel.findById(new Types.ObjectId(id));
+                if (!fir) {
+                    throw new Error('FIR not found');
+                }
+                // Populate all proceedings (no email filter for admin)
+                await fir.populate({
+                    path: 'proceedings',
+                    options: { sort: { sequence: 1 } }
+                });
+            } else {
+                // Regular user: verify ownership
+                fir = await FIRModel.findOne({ _id: new Types.ObjectId(id), email });
+                if (!fir) {
+                    throw new Error('FIR not found or access denied');
+                }
+                // Manually populate proceedings filtered by email
+                await fir.populate({
+                    path: 'proceedings',
+                    match: { email },
+                    options: { sort: { sequence: 1 } }
+                });
             }
-            // Manually populate proceedings filtered by email
-            await fir.populate({
-                path: 'proceedings',
-                match: { email },
-                options: { sort: { sequence: 1 } }
-            });
             return fir;
         } catch (error) {
             throw new Error(error.message);

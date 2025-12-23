@@ -14,11 +14,15 @@ export type AuthToken = {
  * @interface IUserModel
  * @extends {Document}
  */
+export type UserRole = 'USER' | 'ADMIN';
+
 export interface IUserModel extends Document {
     email: string;
     password: string;
     passwordResetToken: string;
     passwordResetExpires: Date;
+    role: UserRole;
+    branch: string;
 
     facebook: string;
     tokens: AuthToken[];
@@ -72,6 +76,18 @@ const UserSchema: Schema = new Schema({
     password: String,
     passwordResetToken: String,
     passwordResetExpires: Date,
+    role: {
+        type: String,
+        enum: ['USER', 'ADMIN'],
+        default: 'USER',
+        required: true,
+    },
+    branch: {
+        type: String,
+        required: true,
+        trim: true,
+        index: true,
+    },
     tokens: Array,
 }, {
     collection: 'usermodel',

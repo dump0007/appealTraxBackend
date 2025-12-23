@@ -4,15 +4,19 @@ import * as http from 'http';
 import app from '../server/server';
 import HttpError from '../error';
 
-interface JWTPayload {
+export interface JWTPayload {
     email: string;
+    role?: string;
+    branch?: string;
     iat?: number;
     exp?: number;
 }
 
-interface RequestWithUser extends Request {
+export interface RequestWithUser extends Request {
     user: JWTPayload | string;
     email?: string; // Extracted email for convenience
+    role?: string; // Extracted role for convenience
+    branch?: string; // Extracted branch for convenience
 }
 
 /**
@@ -37,9 +41,11 @@ export function isAuthenticated(req: RequestWithUser, res: Response, next: NextF
             const decoded = jwt.verify(token.toString(), app.get('secret')) as JWTPayload;
             
             req.user = decoded;
-            // Extract email for convenience
+            // Extract email, role, and branch for convenience
             if (decoded && typeof decoded === 'object' && 'email' in decoded) {
                 req.email = decoded.email;
+                req.role = decoded.role;
+                req.branch = decoded.branch;
             }
 
             return next();

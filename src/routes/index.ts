@@ -9,6 +9,8 @@ import UserRouter from './UserRouter';
 
 import FIRRouter from './FIRRouter';
 import ProceedingRouter from './ProceedingRouter';
+import AdminRouter from './AdminRouter';
+import BranchRouter from './BranchRouter';
 import { getProceedingFilePath } from '../config/middleware/fileUpload';
 
 const swaggerDef = require('../../swaggerDef');
@@ -49,6 +51,22 @@ export function init(app: express.Application): void {
      * @constructs
      */
     app.use('/auth', AuthRouter);
+
+    /**
+     * @description
+     *  Forwards any requests to the /v1/admin URI to our AdminRouter
+     *  Also, check if user authenticated and is admin
+     * @constructs
+     */
+    app.use('/v1/admin', AdminRouter);
+
+    /**
+     * @description
+     *  Forwards any requests to the /v1/branches URI to our BranchRouter
+     *  Also, check if user authenticated
+     * @constructs
+     */
+    app.use('/v1/branches', jwtConfig.isAuthenticated, BranchRouter);
 
     /**
      * @description Serve uploaded proceeding files

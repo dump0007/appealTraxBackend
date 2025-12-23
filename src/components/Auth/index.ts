@@ -49,7 +49,11 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
     try {
         const user: IUserModel = await AuthService.getUser(req.body);
 
-        const token: string = jwt.sign({ email: user.email }, app.get('secret'), {
+        const token: string = jwt.sign({ 
+            email: user.email,
+            role: user.role || 'USER',
+            branch: user.branch || ''
+        }, app.get('secret'), {
             expiresIn: '60m',
         });
 
@@ -57,6 +61,8 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
             status: 200,
             logged: true,
             token,
+            role: user.role || 'USER',
+            branch: user.branch || '',
             message: 'Sign in successfull',
         });
     } catch (error) {
