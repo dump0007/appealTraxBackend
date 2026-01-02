@@ -83,7 +83,19 @@ const AdminService: IAdminService = {
             // Update fields
             if (userData.email !== undefined) user.email = userData.email;
             if (userData.role !== undefined) user.role = userData.role;
-            if (userData.branch !== undefined) user.branch = userData.branch;
+            
+            // Handle branch update with validation
+            if (userData.branch !== undefined && userData.branch !== user.branch) {
+                // Check how many users have the current branch
+                const usersWithCurrentBranch = await UserModel.countDocuments({ branch: user.branch });
+                
+                // If only 1 user has this branch (the one being edited), prevent change
+                if (usersWithCurrentBranch <= 1) {
+                    throw new Error('Cannot change branch. This is the only user for this branch.');
+                }
+                
+                user.branch = userData.branch;
+            }
 
             // Handle password update - set plain password, pre-save hook will hash it
             if (userData.password) {
@@ -372,6 +384,66 @@ const AdminService: IAdminService = {
                 pending,
                 overdue
             };
+        } catch (error) {
+            throw new Error(error.message);
+        }
+    },
+
+    async getUserActivityLogs(filters?: {
+        userEmail?: string;
+        branch?: string;
+        action?: string;
+        resourceType?: string;
+        startDate?: Date;
+        endDate?: Date;
+        limit?: number;
+        skip?: number;
+    }): Promise<IAuditLogModel[]> {
+        try {
+            const query: any = {};
+            
+            // Filter by user email if provided
+            if (filters?.userEmail) {
+                query.userEmail = filters.userEmail;
+            }
+            
+            // Filter by branch if provided (check details.branch field)
+            if (filters?.branch) {
+                query['details.branch'] = filters.branch;
+            }
+            
+            // Filter by action if provided
+            if (filters?.action) {
+                query.action = filters.action;
+            }
+            
+            // Filter by resource type if provided
+            if (filters?.resourceType) {
+                query.resourceType = filters.resourceType;
+            }
+            
+            // Filter by date range if provided
+            if (filters?.startDate || filters?.endDate) {
+                query.timestamp = {};
+                if (filters.startDate) {
+                    query.timestamp.$gte = new Date(filters.startDate);
+                }
+                if (filters.endDate) {
+                    query.timestamp.$lte = new Date(filters.endDate);
+                }
+            }
+            
+            const limit = filters?.limit || 100;
+            const skip = filters?.skip || 0;
+            
+            const logs = await AuditLogModel.find(query)
+                .sort({ timestamp: -1 })
+                .limit(limit)
+                .skip(skip)
+                .populate('userId', 'email role branch')
+                .lean();
+            
+            return logs as IAuditLogModel[];
         } catch (error) {
             throw new Error(error.message);
         }

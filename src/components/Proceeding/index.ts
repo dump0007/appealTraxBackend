@@ -4,19 +4,20 @@ import ProceedingService from './service';
 import { HttpError } from '../../config/error';
 import { IProceedingModel } from './model';
 import { validateProceedingFile, saveProceedingFile, deleteProceedingFile } from '../../config/middleware/fileUpload';
-
-interface RequestWithUser extends Request {
-    user?: { email?: string } | string;
-    email?: string;
-}
+import { RequestWithUser } from '../../config/middleware/jwtAuth';
+import AdminService from '../Admin/service';
 
 export async function findAll(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
         const email = req.email || (req.user as any)?.email;
+        const branch = req.branch;
+        const role = req.role;
+        const isAdmin = role === 'ADMIN';
+        
         if (!email) {
             return next(new HttpError(401, 'User email not found in token'));
         }
-        const items: IProceedingModel[] = await ProceedingService.findAll(email);
+        const items: IProceedingModel[] = await ProceedingService.findAll(email, branch, isAdmin);
         res.status(200).json(items);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
@@ -26,10 +27,14 @@ export async function findAll(req: RequestWithUser, res: Response, next: NextFun
 export async function findByFIR(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
         const email = req.email || (req.user as any)?.email;
+        const branch = req.branch;
+        const role = req.role;
+        const isAdmin = role === 'ADMIN';
+        
         if (!email) {
             return next(new HttpError(401, 'User email not found in token'));
         }
-        const items: IProceedingModel[] = await ProceedingService.findByFIR(req.params.firId, email);
+        const items: IProceedingModel[] = await ProceedingService.findByFIR(req.params.firId, email, branch, isAdmin);
         res.status(200).json(items);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
@@ -39,10 +44,14 @@ export async function findByFIR(req: RequestWithUser, res: Response, next: NextF
 export async function findOne(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
         const email = req.email || (req.user as any)?.email;
+        const branch = req.branch;
+        const role = req.role;
+        const isAdmin = role === 'ADMIN';
+        
         if (!email) {
             return next(new HttpError(401, 'User email not found in token'));
         }
-        const item: IProceedingModel = await ProceedingService.findOne(req.params.id, email);
+        const item: IProceedingModel = await ProceedingService.findOne(req.params.id, email, branch, isAdmin);
         res.status(200).json(item);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
@@ -349,7 +358,29 @@ export async function create(req: RequestWithUser, res: Response, next: NextFunc
             body.createdBy = createdBy;
         }
 
+        const branch = req.branch;
         const item: IProceedingModel = await ProceedingService.insert(body, email);
+        
+        // Create audit log
+        try {
+            await AdminService.createAuditLog(
+                'CREATE_PROCEEDING',
+                email,
+                'PROCEEDING',
+                { 
+                    proceedingId: item._id.toString(), 
+                    firId: item.fir?.toString() || '',
+                    branch: branch || '',
+                    type: item.type 
+                },
+                item._id.toString(),
+                undefined,
+                req.ip
+            );
+        } catch (auditError) {
+            console.error('Failed to create audit log:', auditError);
+        }
+        
         res.status(201).json(item);
     } catch (error) {
         // If file was saved but proceeding creation failed, delete the file
@@ -367,10 +398,14 @@ export async function create(req: RequestWithUser, res: Response, next: NextFunc
 export async function findDraftByFIR(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
         const email = req.email || (req.user as any)?.email;
+        const branch = req.branch;
+        const role = req.role;
+        const isAdmin = role === 'ADMIN';
+        
         if (!email) {
             return next(new HttpError(401, 'User email not found in token'));
         }
-        const item: IProceedingModel | null = await ProceedingService.findDraftByFIR(req.params.firId, email);
+        const item: IProceedingModel | null = await ProceedingService.findDraftByFIR(req.params.firId, email, branch, isAdmin);
         res.status(200).json(item);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
@@ -380,6 +415,10 @@ export async function findDraftByFIR(req: RequestWithUser, res: Response, next: 
 export async function update(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
         const email = req.email || (req.user as any)?.email;
+        const branch = req.branch;
+        const role = req.role;
+        const isAdmin = role === 'ADMIN';
+        
         if (!email) {
             return next(new HttpError(401, 'User email not found in token'));
         }
@@ -798,7 +837,28 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
             });
         }
 
-        const item: IProceedingModel = await ProceedingService.update(req.params.id, body, email, filesToDelete);
+        const item: IProceedingModel = await ProceedingService.update(req.params.id, body, email, filesToDelete, branch, isAdmin);
+        
+        // Create audit log
+        try {
+            await AdminService.createAuditLog(
+                'UPDATE_PROCEEDING',
+                email,
+                'PROCEEDING',
+                { 
+                    proceedingId: item._id.toString(), 
+                    firId: item.fir?.toString() || '',
+                    branch: branch || '',
+                    changes: Object.keys(body)
+                },
+                item._id.toString(),
+                undefined,
+                req.ip
+            );
+        } catch (auditError) {
+            console.error('Failed to create audit log:', auditError);
+        }
+        
         res.status(200).json(item);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
@@ -808,10 +868,34 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
 export async function remove(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
         const email = req.email || (req.user as any)?.email;
+        const branch = req.branch;
+        const role = req.role;
+        const isAdmin = role === 'ADMIN';
+        
         if (!email) {
             return next(new HttpError(401, 'User email not found in token'));
         }
-        const item: IProceedingModel = await ProceedingService.remove(req.params.id, email);
+        const item: IProceedingModel = await ProceedingService.remove(req.params.id, email, branch, isAdmin);
+        
+        // Create audit log
+        try {
+            await AdminService.createAuditLog(
+                'DELETE_PROCEEDING',
+                email,
+                'PROCEEDING',
+                { 
+                    proceedingId: item._id.toString(), 
+                    firId: item.fir?.toString() || '',
+                    branch: branch || ''
+                },
+                item._id.toString(),
+                undefined,
+                req.ip
+            );
+        } catch (auditError) {
+            console.error('Failed to create audit log:', auditError);
+        }
+        
         res.status(200).json(item);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));

@@ -229,6 +229,42 @@ export async function getAdminAffidavitMetrics(req: RequestWithUser, res: Respon
 /**
  * Get audit logs (admin only)
  */
+export async function getUserActivityLogs(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const filters: any = {};
+        
+        if (req.query.userEmail) {
+            filters.userEmail = req.query.userEmail as string;
+        }
+        if (req.query.branch) {
+            filters.branch = req.query.branch as string;
+        }
+        if (req.query.action) {
+            filters.action = req.query.action as string;
+        }
+        if (req.query.resourceType) {
+            filters.resourceType = req.query.resourceType as string;
+        }
+        if (req.query.startDate) {
+            filters.startDate = new Date(req.query.startDate as string);
+        }
+        if (req.query.endDate) {
+            filters.endDate = new Date(req.query.endDate as string);
+        }
+        if (req.query.limit) {
+            filters.limit = parseInt(req.query.limit as string, 10);
+        }
+        if (req.query.skip) {
+            filters.skip = parseInt(req.query.skip as string, 10);
+        }
+        
+        const logs = await AdminService.getUserActivityLogs(filters);
+        res.status(200).json(logs);
+    } catch (error) {
+        next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
+    }
+}
+
 export async function getAuditLogs(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
         const filters: any = {};

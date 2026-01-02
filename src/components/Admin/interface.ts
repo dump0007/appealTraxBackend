@@ -20,6 +20,7 @@ export interface IAdminService {
     getAdminMotionMetrics(): Promise<{ filed: number, pending: number, overdue: number }>;
     getAdminAffidavitMetrics(): Promise<{ filed: number, pending: number, overdue: number }>;
     getAuditLogs(filters?: { userEmail?: string; action?: string; resourceType?: string; startDate?: Date; endDate?: Date; limit?: number; skip?: number }): Promise<IAuditLogModel[]>;
+    getUserActivityLogs(filters?: { userEmail?: string; branch?: string; action?: string; resourceType?: string; startDate?: Date; endDate?: Date; limit?: number; skip?: number }): Promise<IAuditLogModel[]>;
     createAuditLog(action: string, userEmail: string, resourceType: string, details: any, resourceId?: string, userId?: string, ipAddress?: string): Promise<IAuditLogModel>;
     getConfig(): Promise<IConfigModel[]>;
     updateConfig(key: string, value: any, description: string, updatedBy: string): Promise<IConfigModel>;

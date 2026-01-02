@@ -5,16 +5,48 @@ import FIRValidation from './validation';
 import { IFIRService } from './interface';
 
 const FIRService: IFIRService = {
-    async findAll(email: string): Promise<IFIRModel[]> {
+    async findAll(email: string, branch?: string, isAdmin?: boolean): Promise<IFIRModel[]> {
         try {
-            const firs = await FIRModel.find({ email });
-            // Manually populate proceedings filtered by email
-            for (const fir of firs) {
-                await fir.populate({
-                    path: 'proceedings',
-                    match: { email },
-                    options: { sort: { sequence: 1 } }
+            let firs: IFIRModel[];
+            
+            if (isAdmin) {
+                // Admin can see all FIRs
+                firs = await FIRModel.find({});
+            } else if (branch) {
+                // Regular user: filter by branch
+                firs = await FIRModel.find({
+                    $or: [
+                        { branchName: branch },
+                        { branch: branch }
+                    ]
                 });
+            } else {
+                // Fallback to email filter for backward compatibility
+                firs = await FIRModel.find({ email });
+            }
+            
+            // Populate proceedings - for branch-based access, show all proceedings for FIRs in branch
+            for (const fir of firs) {
+                if (isAdmin) {
+                    // Admin sees all proceedings
+                    await fir.populate({
+                        path: 'proceedings',
+                        options: { sort: { sequence: 1 } }
+                    });
+                } else if (branch) {
+                    // Regular user: show all proceedings for FIRs in their branch
+                    await fir.populate({
+                        path: 'proceedings',
+                        options: { sort: { sequence: 1 } }
+                    });
+                } else {
+                    // Fallback: filter by email
+                    await fir.populate({
+                        path: 'proceedings',
+                        match: { email },
+                        options: { sort: { sequence: 1 } }
+                    });
+                }
             }
             return firs;
         } catch (error) {
@@ -22,17 +54,12 @@ const FIRService: IFIRService = {
         }
     },
 
-    async findOne(id: string, email: string): Promise<IFIRModel> {
+    async findOne(id: string, email: string, branch?: string, isAdmin?: boolean): Promise<IFIRModel> {
         try {
             const validate: Joi.ValidationResult = FIRValidation.byId({ id });
             if (validate.error) {
                 throw new Error(validate.error.message);
             }
-            
-            // Check if user is admin
-            const UserModel = (await import('../User/model')).default;
-            const user = await UserModel.findOne({ email });
-            const isAdmin = user && user.role === 'ADMIN';
             
             let fir;
             if (isAdmin) {
@@ -41,18 +68,34 @@ const FIRService: IFIRService = {
                 if (!fir) {
                     throw new Error('FIR not found');
                 }
-                // Populate all proceedings (no email filter for admin)
+                // Populate all proceedings
+                await fir.populate({
+                    path: 'proceedings',
+                    options: { sort: { sequence: 1 } }
+                });
+            } else if (branch) {
+                // Regular user: verify FIR belongs to their branch
+                fir = await FIRModel.findOne({
+                    _id: new Types.ObjectId(id),
+                    $or: [
+                        { branchName: branch },
+                        { branch: branch }
+                    ]
+                });
+                if (!fir) {
+                    throw new Error('FIR not found or access denied');
+                }
+                // Populate all proceedings for FIRs in their branch
                 await fir.populate({
                     path: 'proceedings',
                     options: { sort: { sequence: 1 } }
                 });
             } else {
-                // Regular user: verify ownership
+                // Fallback: verify ownership by email
                 fir = await FIRModel.findOne({ _id: new Types.ObjectId(id), email });
                 if (!fir) {
                     throw new Error('FIR not found or access denied');
                 }
-                // Manually populate proceedings filtered by email
                 await fir.populate({
                     path: 'proceedings',
                     match: { email },
@@ -137,7 +180,7 @@ const FIRService: IFIRService = {
         }
     },
 
-    async update(id: string, body: IFIRModel, email: string): Promise<IFIRModel> {
+    async update(id: string, body: IFIRModel, email: string, branch?: string, isAdmin?: boolean): Promise<IFIRModel> {
         try {
             const validate: Joi.ValidationResult = FIRValidation.byId({ id });
             if (validate.error) {
@@ -199,9 +242,25 @@ const FIRService: IFIRService = {
             }
 
             // Don't update email - keep original
+            let query: any = { _id: new Types.ObjectId(id) };
+            
+            if (isAdmin) {
+                // Admin can update any FIR
+                // No additional query filter needed
+            } else if (branch) {
+                // Regular user: verify FIR belongs to their branch
+                query.$or = [
+                    { branchName: branch },
+                    { branch: branch }
+                ];
+            } else {
+                // Fallback: verify ownership by email
+                query.email = email;
+            }
+            
             const fir: IFIRModel = await FIRModel.findOneAndUpdate(
-                { _id: new Types.ObjectId(id), email },
-                { ...body, email }, // Ensure email is not changed
+                query,
+                { ...body, email: body.email || email }, // Keep original email or use body email
                 { new: true, runValidators: true }
             );
             if (!fir) {
@@ -213,13 +272,30 @@ const FIRService: IFIRService = {
         }
     },
 
-    async remove(id: string, email: string): Promise<IFIRModel> {
+    async remove(id: string, email: string, branch?: string, isAdmin?: boolean): Promise<IFIRModel> {
         try {
             const validate: Joi.ValidationResult = FIRValidation.byId({ id });
             if (validate.error) {
                 throw new Error(validate.error.message);
             }
-            const fir: IFIRModel = await FIRModel.findOneAndRemove({ _id: new Types.ObjectId(id), email });
+            
+            let query: any = { _id: new Types.ObjectId(id) };
+            
+            if (isAdmin) {
+                // Admin can delete any FIR
+                // No additional query filter needed
+            } else if (branch) {
+                // Regular user: verify FIR belongs to their branch
+                query.$or = [
+                    { branchName: branch },
+                    { branch: branch }
+                ];
+            } else {
+                // Fallback: verify ownership by email
+                query.email = email;
+            }
+            
+            const fir: IFIRModel = await FIRModel.findOneAndRemove(query);
             if (!fir) {
                 throw new Error('FIR not found or access denied');
             }

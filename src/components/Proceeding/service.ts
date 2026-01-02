@@ -5,31 +5,52 @@ import ProceedingValidation from './validation';
 import { IProceedingService } from './interface';
 
 const ProceedingService: IProceedingService = {
-    async findAll(email: string): Promise<IProceedingModel[]> {
+    async findAll(email: string, branch?: string, isAdmin?: boolean): Promise<IProceedingModel[]> {
         try {
-            // Only return non-draft proceedings
-            return await ProceedingModel.find({ email, draft: false })
-                .sort({ fir: 1, sequence: 1 })
-                .populate('fir')
-                .populate('createdBy');
+            if (isAdmin) {
+                // Admin can see all non-draft proceedings
+                return await ProceedingModel.find({ draft: false })
+                    .sort({ fir: 1, sequence: 1 })
+                    .populate('fir')
+                    .populate('createdBy');
+            } else if (branch) {
+                // Regular user: get all FIRs in their branch, then get proceedings for those FIRs
+                const FIRModel = (await import('../FIR/model')).default;
+                const firs = await FIRModel.find({
+                    $or: [
+                        { branchName: branch },
+                        { branch: branch }
+                    ]
+                }).select('_id');
+                const firIds = firs.map(f => f._id);
+                
+                return await ProceedingModel.find({ 
+                    fir: { $in: firIds },
+                    draft: false 
+                })
+                    .sort({ fir: 1, sequence: 1 })
+                    .populate('fir')
+                    .populate('createdBy');
+            } else {
+                // Fallback: filter by email
+                return await ProceedingModel.find({ email, draft: false })
+                    .sort({ fir: 1, sequence: 1 })
+                    .populate('fir')
+                    .populate('createdBy');
+            }
         } catch (error) {
             throw new Error(error.message);
         }
     },
 
-    async findByFIR(firId: string, email: string): Promise<IProceedingModel[]> {
+    async findByFIR(firId: string, email: string, branch?: string, isAdmin?: boolean): Promise<IProceedingModel[]> {
         try {
             const validate: Joi.ValidationResult = ProceedingValidation.byFIR({ firId });
             if (validate.error) {
                 throw new Error(validate.error.message);
             }
             
-            // Check if user is admin
-            const UserModel = (await import('../User/model')).default;
-            const user = await UserModel.findOne({ email });
-            const isAdmin = user && user.role === 'ADMIN';
-            
-            // Verify the FIR belongs to this user (or allow admin to view any FIR)
+            // Verify the FIR belongs to user's branch (or allow admin to view any FIR)
             const FIRModel = (await import('../FIR/model')).default;
             let fir;
             if (isAdmin) {
@@ -38,8 +59,20 @@ const ProceedingService: IProceedingService = {
                 if (!fir) {
                     throw new Error('FIR not found');
                 }
+            } else if (branch) {
+                // Regular user: verify FIR belongs to their branch
+                fir = await FIRModel.findOne({
+                    _id: new Types.ObjectId(firId),
+                    $or: [
+                        { branchName: branch },
+                        { branch: branch }
+                    ]
+                });
+                if (!fir) {
+                    throw new Error('FIR not found or access denied');
+                }
             } else {
-                // Regular user: verify FIR ownership
+                // Fallback: verify FIR ownership by email
                 fir = await FIRModel.findOne({ _id: new Types.ObjectId(firId), email });
                 if (!fir) {
                     throw new Error('FIR not found or access denied');
@@ -47,14 +80,14 @@ const ProceedingService: IProceedingService = {
             }
             
             // Only return non-draft proceedings
-            if (isAdmin) {
-                // Admin can view all proceedings for this FIR
+            if (isAdmin || branch) {
+                // Admin or branch-based access: show all proceedings for this FIR
                 return await ProceedingModel.find({ fir: new Types.ObjectId(firId), draft: false })
                     .sort({ sequence: 1 })
                     .populate('fir')
                     .populate('createdBy');
             } else {
-                // Regular user: filter by email
+                // Fallback: filter by email
                 return await ProceedingModel.find({ fir: new Types.ObjectId(firId), email, draft: false })
                     .sort({ sequence: 1 })
                     .populate('fir')
@@ -65,17 +98,12 @@ const ProceedingService: IProceedingService = {
         }
     },
 
-    async findOne(id: string, email: string): Promise<IProceedingModel> {
+    async findOne(id: string, email: string, branch?: string, isAdmin?: boolean): Promise<IProceedingModel> {
         try {
             const validate: Joi.ValidationResult = ProceedingValidation.byId({ id });
             if (validate.error) {
                 throw new Error(validate.error.message);
             }
-            
-            // Check if user is admin
-            const UserModel = (await import('../User/model')).default;
-            const user = await UserModel.findOne({ email });
-            const isAdmin = user && user.role === 'ADMIN';
             
             let proceeding;
             if (isAdmin) {
@@ -86,8 +114,22 @@ const ProceedingService: IProceedingService = {
                 if (!proceeding) {
                     throw new Error('Proceeding not found');
                 }
+            } else if (branch) {
+                // Regular user: verify proceeding's FIR belongs to their branch
+                proceeding = await ProceedingModel.findById(new Types.ObjectId(id))
+                    .populate('fir')
+                    .populate('createdBy');
+                if (!proceeding) {
+                    throw new Error('Proceeding not found');
+                }
+                // Check if FIR belongs to user's branch
+                const fir = proceeding.fir as any;
+                const firBranch = fir?.branchName || fir?.branch;
+                if (firBranch !== branch) {
+                    throw new Error('Proceeding not found or access denied');
+                }
             } else {
-                // Regular user: verify ownership
+                // Fallback: verify ownership by email
                 proceeding = await ProceedingModel.findOne({ _id: new Types.ObjectId(id), email })
                     .populate('fir')
                     .populate('createdBy');
@@ -101,19 +143,14 @@ const ProceedingService: IProceedingService = {
         }
     },
 
-    async findDraftByFIR(firId: string, email: string): Promise<IProceedingModel | null> {
+    async findDraftByFIR(firId: string, email: string, branch?: string, isAdmin?: boolean): Promise<IProceedingModel | null> {
         try {
             const validate: Joi.ValidationResult = ProceedingValidation.byFIR({ firId });
             if (validate.error) {
                 throw new Error(validate.error.message);
             }
             
-            // Check if user is admin
-            const UserModel = (await import('../User/model')).default;
-            const user = await UserModel.findOne({ email });
-            const isAdmin = user && user.role === 'ADMIN';
-            
-            // Verify the FIR belongs to this user (or allow admin to view any FIR)
+            // Verify the FIR belongs to user's branch (or allow admin to view any FIR)
             const FIRModel = (await import('../FIR/model')).default;
             let fir;
             if (isAdmin) {
@@ -122,21 +159,33 @@ const ProceedingService: IProceedingService = {
                 if (!fir) {
                     throw new Error('FIR not found');
                 }
+            } else if (branch) {
+                // Regular user: verify FIR belongs to their branch
+                fir = await FIRModel.findOne({
+                    _id: new Types.ObjectId(firId),
+                    $or: [
+                        { branchName: branch },
+                        { branch: branch }
+                    ]
+                });
+                if (!fir) {
+                    throw new Error('FIR not found or access denied');
+                }
             } else {
-                // Regular user: verify FIR ownership
+                // Fallback: verify FIR ownership by email
                 fir = await FIRModel.findOne({ _id: new Types.ObjectId(firId), email });
                 if (!fir) {
                     throw new Error('FIR not found or access denied');
                 }
             }
             
-            if (isAdmin) {
-                // Admin can view drafts for any FIR
+            if (isAdmin || branch) {
+                // Admin or branch-based access: show any draft for this FIR
                 return await ProceedingModel.findOne({ fir: new Types.ObjectId(firId), draft: true })
                     .populate('fir')
                     .populate('createdBy');
             } else {
-                // Regular user: filter by email
+                // Fallback: filter by email
                 return await ProceedingModel.findOne({ fir: new Types.ObjectId(firId), email, draft: true })
                     .populate('fir')
                     .populate('createdBy');
@@ -481,7 +530,7 @@ const ProceedingService: IProceedingService = {
         }
     },
 
-    async update(id: string, body: IProceedingModel, email: string, filesToDelete?: string[]): Promise<IProceedingModel> {
+    async update(id: string, body: IProceedingModel, email: string, filesToDelete?: string[], branch?: string, isAdmin?: boolean): Promise<IProceedingModel> {
         try {
             const validate: Joi.ValidationResult = ProceedingValidation.byId({ id });
             if (validate.error) {
@@ -489,20 +538,55 @@ const ProceedingService: IProceedingService = {
             }
 
             // Find existing proceeding
-            const existingProceeding = await ProceedingModel.findOne({ _id: new Types.ObjectId(id), email });
+            let existingProceeding;
+            if (isAdmin) {
+                existingProceeding = await ProceedingModel.findById(new Types.ObjectId(id));
+            } else if (branch) {
+                existingProceeding = await ProceedingModel.findById(new Types.ObjectId(id));
+                if (existingProceeding) {
+                    // Verify proceeding's FIR belongs to user's branch
+                    const FIRModel = (await import('../FIR/model')).default;
+                    const fir = await FIRModel.findById(existingProceeding.fir);
+                    if (!fir || (fir.branchName !== branch && fir.branch !== branch)) {
+                        throw new Error('Proceeding not found or access denied');
+                    }
+                }
+            } else {
+                existingProceeding = await ProceedingModel.findOne({ _id: new Types.ObjectId(id), email });
+            }
+            
             if (!existingProceeding) {
                 throw new Error('Proceeding not found or access denied');
             }
 
             // Verify FIR is completed (has non-draft proceedings)
             const FIRModel = (await import('../FIR/model')).default;
-            const fir = await FIRModel.findOne({ _id: existingProceeding.fir, email });
+            let fir;
+            if (isAdmin) {
+                fir = await FIRModel.findById(existingProceeding.fir);
+            } else if (branch) {
+                fir = await FIRModel.findOne({
+                    _id: existingProceeding.fir,
+                    $or: [
+                        { branchName: branch },
+                        { branch: branch }
+                    ]
+                });
+            } else {
+                fir = await FIRModel.findOne({ _id: existingProceeding.fir, email });
+            }
+            
             if (!fir) {
                 throw new Error('FIR not found or access denied');
             }
 
             // Check if FIR has completed proceedings
-            const allProceedings = await ProceedingModel.find({ fir: existingProceeding.fir, email, draft: false });
+            let allProceedings;
+            if (isAdmin || branch) {
+                allProceedings = await ProceedingModel.find({ fir: existingProceeding.fir, draft: false });
+            } else {
+                allProceedings = await ProceedingModel.find({ fir: existingProceeding.fir, email, draft: false });
+            }
             const hasCompletedProceedings = allProceedings.length > 0 && allProceedings.some(p => !p.draft);
             if (!hasCompletedProceedings) {
                 throw new Error('Cannot edit proceeding: FIR must be fully completed before editing');
@@ -656,8 +740,14 @@ const ProceedingService: IProceedingService = {
             }
 
             // Update proceeding
+            let query: any = { _id: new Types.ObjectId(id) };
+            if (!isAdmin && !branch) {
+                // Fallback: filter by email
+                query.email = email;
+            }
+            
             const updatedProceeding = await ProceedingModel.findOneAndUpdate(
-                { _id: new Types.ObjectId(id), email },
+                query,
                 updateData,
                 { new: true, runValidators: true }
             );
@@ -704,17 +794,41 @@ const ProceedingService: IProceedingService = {
         }
     },
 
-    async remove(id: string, email: string): Promise<IProceedingModel> {
+    async remove(id: string, email: string, branch?: string, isAdmin?: boolean): Promise<IProceedingModel> {
         try {
             const validate: Joi.ValidationResult = ProceedingValidation.byId({ id });
             if (validate.error) {
                 throw new Error(validate.error.message);
             }
-            const proceeding: IProceedingModel = await ProceedingModel.findOneAndRemove({ _id: new Types.ObjectId(id), email });
+            
+            // Verify proceeding access
+            let proceeding;
+            if (isAdmin) {
+                proceeding = await ProceedingModel.findById(new Types.ObjectId(id));
+            } else if (branch) {
+                proceeding = await ProceedingModel.findById(new Types.ObjectId(id));
+                if (proceeding) {
+                    // Verify proceeding's FIR belongs to user's branch
+                    const FIRModel = (await import('../FIR/model')).default;
+                    const fir = await FIRModel.findById(proceeding.fir);
+                    if (!fir || (fir.branchName !== branch && fir.branch !== branch)) {
+                        throw new Error('Proceeding not found or access denied');
+                    }
+                }
+            } else {
+                proceeding = await ProceedingModel.findOne({ _id: new Types.ObjectId(id), email });
+            }
+            
             if (!proceeding) {
                 throw new Error('Proceeding not found or access denied');
             }
-            return proceeding;
+            
+            // Use the proceeding we already found and verified
+            const deletedProceeding = await ProceedingModel.findOneAndRemove({ _id: new Types.ObjectId(id) });
+            if (!deletedProceeding) {
+                throw new Error('Proceeding not found or access denied');
+            }
+            return deletedProceeding;
         } catch (error) {
             throw new Error(error.message);
         }

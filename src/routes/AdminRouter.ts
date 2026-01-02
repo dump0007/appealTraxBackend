@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { AdminComponent } from '../components';
+import { AdminComponent, BranchComponent } from '../components';
 import { isAuthenticated } from '../config/middleware/jwtAuth';
 import { isAdmin } from '../config/middleware/adminAuth';
 
@@ -43,12 +43,22 @@ router.get('/affidavit-metrics', AdminComponent.getAdminAffidavitMetrics);
  * Audit Log Routes
  */
 router.get('/audit-logs', AdminComponent.getAuditLogs);
+router.get('/user-logs', AdminComponent.getUserActivityLogs);
 
 /**
  * Config Routes
  */
 router.get('/config', AdminComponent.getConfig);
 router.put('/config', AdminComponent.updateConfig);
+
+/**
+ * Branch Management Routes
+ */
+router.get('/branches', BranchComponent.getAllBranches);
+router.post('/branches', BranchComponent.createBranch);
+router.put('/branches/:name', BranchComponent.updateBranch);
+router.get('/branches/:name/check-deletion', BranchComponent.checkBranchDeletion);
+router.delete('/branches/:name', BranchComponent.deleteBranch);
 
 /**
  * @export {express.Router}
