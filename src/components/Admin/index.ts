@@ -122,7 +122,10 @@ export async function deleteUser(req: RequestWithUser, res: Response, next: Next
  */
 export async function getAllFIRs(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
-        const firs = await AdminService.getAllFIRs();
+        const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+        const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+        const branch = req.query.branch as string | undefined;
+        const firs = await AdminService.getAllFIRs(startDate, endDate, branch);
         res.status(200).json(firs);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
@@ -134,7 +137,10 @@ export async function getAllFIRs(req: RequestWithUser, res: Response, next: Next
  */
 export async function getAllProceedings(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
-        const proceedings = await AdminService.getAllProceedings();
+        const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+        const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+        const branch = req.query.branch as string | undefined;
+        const proceedings = await AdminService.getAllProceedings(startDate, endDate, branch);
         res.status(200).json(proceedings);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
@@ -171,7 +177,10 @@ export async function getDashboardAnalytics(req: RequestWithUser, res: Response,
  */
 export async function getAdminDashboardMetrics(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
-        const metrics = await AdminService.getAdminDashboardMetrics();
+        const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+        const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+        const branch = req.query.branch as string | undefined;
+        const metrics = await AdminService.getAdminDashboardMetrics(startDate, endDate, branch);
         res.status(200).json(metrics);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
@@ -183,7 +192,10 @@ export async function getAdminDashboardMetrics(req: RequestWithUser, res: Respon
  */
 export async function getAdminCityGraph(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
-        const data = await AdminService.getAdminCityGraph();
+        const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+        const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+        const branch = req.query.branch as string | undefined;
+        const data = await AdminService.getAdminCityGraph(startDate, endDate, branch);
         res.status(200).json(data);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
@@ -195,7 +207,10 @@ export async function getAdminCityGraph(req: RequestWithUser, res: Response, nex
  */
 export async function getAdminWritTypeDistribution(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
-        const data = await AdminService.getAdminWritTypeDistribution();
+        const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+        const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+        const branch = req.query.branch as string | undefined;
+        const data = await AdminService.getAdminWritTypeDistribution(startDate, endDate, branch);
         res.status(200).json(data);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
@@ -207,7 +222,10 @@ export async function getAdminWritTypeDistribution(req: RequestWithUser, res: Re
  */
 export async function getAdminMotionMetrics(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
-        const metrics = await AdminService.getAdminMotionMetrics();
+        const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+        const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+        const branch = req.query.branch as string | undefined;
+        const metrics = await AdminService.getAdminMotionMetrics(startDate, endDate, branch);
         res.status(200).json(metrics);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
@@ -219,7 +237,10 @@ export async function getAdminMotionMetrics(req: RequestWithUser, res: Response,
  */
 export async function getAdminAffidavitMetrics(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
-        const metrics = await AdminService.getAdminAffidavitMetrics();
+        const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+        const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+        const branch = req.query.branch as string | undefined;
+        const metrics = await AdminService.getAdminAffidavitMetrics(startDate, endDate, branch);
         res.status(200).json(metrics);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));

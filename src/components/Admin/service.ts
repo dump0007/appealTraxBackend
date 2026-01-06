@@ -130,9 +130,45 @@ const AdminService: IAdminService = {
         }
     },
 
-    async getAllFIRs(): Promise<IFIRModel[]> {
+    async getAllFIRs(startDate?: Date, endDate?: Date, branch?: string): Promise<IFIRModel[]> {
         try {
-            return await FIRModel.find({})
+            const query: any = {};
+            const conditions: any[] = [];
+            
+            // Apply date range filter
+            if (startDate || endDate) {
+                const dateConditions: any[] = [];
+                if (startDate && endDate) {
+                    dateConditions.push({ dateOfFIR: { $gte: startDate, $lte: endDate } });
+                    dateConditions.push({ dateOfFiling: { $gte: startDate, $lte: endDate } });
+                } else if (startDate) {
+                    dateConditions.push({ dateOfFIR: { $gte: startDate } });
+                    dateConditions.push({ dateOfFiling: { $gte: startDate } });
+                } else if (endDate) {
+                    dateConditions.push({ dateOfFIR: { $lte: endDate } });
+                    dateConditions.push({ dateOfFiling: { $lte: endDate } });
+                }
+                if (dateConditions.length > 0) {
+                    conditions.push({ $or: dateConditions });
+                }
+            }
+            
+            // Apply branch filter
+            if (branch) {
+                conditions.push({
+                    $or: [
+                        { branchName: branch },
+                        { branch: branch }
+                    ]
+                });
+            }
+            
+            // Combine all conditions with $and
+            if (conditions.length > 0) {
+                query.$and = conditions;
+            }
+            
+            return await FIRModel.find(query)
                 .populate('proceedings')
                 .sort({ createdAt: -1 });
         } catch (error) {
@@ -140,9 +176,57 @@ const AdminService: IAdminService = {
         }
     },
 
-    async getAllProceedings(): Promise<IProceedingModel[]> {
+    async getAllProceedings(startDate?: Date, endDate?: Date, branch?: string): Promise<IProceedingModel[]> {
         try {
-            return await ProceedingModel.find({ draft: false })
+            let query: any = { draft: false };
+            
+            // If date or branch filters are provided, we need to filter via FIR lookup
+            if (startDate || endDate || branch) {
+                let firQuery: any = {};
+                const conditions: any[] = [];
+                
+                // Apply date range filter to FIR
+                if (startDate || endDate) {
+                    const dateConditions: any[] = [];
+                    if (startDate && endDate) {
+                        dateConditions.push({ dateOfFIR: { $gte: startDate, $lte: endDate } });
+                        dateConditions.push({ dateOfFiling: { $gte: startDate, $lte: endDate } });
+                    } else if (startDate) {
+                        dateConditions.push({ dateOfFIR: { $gte: startDate } });
+                        dateConditions.push({ dateOfFiling: { $gte: startDate } });
+                    } else if (endDate) {
+                        dateConditions.push({ dateOfFIR: { $lte: endDate } });
+                        dateConditions.push({ dateOfFiling: { $lte: endDate } });
+                    }
+                    if (dateConditions.length > 0) {
+                        conditions.push({ $or: dateConditions });
+                    }
+                }
+                
+                // Apply branch filter to FIR
+                if (branch) {
+                    conditions.push({
+                        $or: [
+                            { branchName: branch },
+                            { branch: branch }
+                        ]
+                    });
+                }
+                
+                // Combine all conditions with $and
+                if (conditions.length > 0) {
+                    firQuery.$and = conditions;
+                }
+                
+                // Find FIRs matching the filters
+                const matchingFIRs = await FIRModel.find(firQuery).select('_id');
+                const firIds = matchingFIRs.map(fir => fir._id);
+                
+                // Filter proceedings by FIR IDs
+                query.fir = { $in: firIds };
+            }
+            
+            return await ProceedingModel.find(query)
                 .populate('fir')
                 .populate('createdBy')
                 .sort({ createdAt: -1 });
@@ -192,7 +276,7 @@ const AdminService: IAdminService = {
         }
     },
 
-    async getAdminDashboardMetrics(): Promise<any> {
+    async getAdminDashboardMetrics(startDate?: Date, endDate?: Date, branch?: string): Promise<any> {
         try {
             const ongoingStatuses = [
                 'REGISTERED',
@@ -201,8 +285,45 @@ const AdminService: IAdminService = {
                 'CHARGESHEET_FILED',
             ];
 
+            // Build match stage for filters
+            const matchStage: any = {};
+            const conditions: any[] = [];
+            
+            // Apply date range filter
+            if (startDate || endDate) {
+                const dateConditions: any[] = [];
+                if (startDate && endDate) {
+                    dateConditions.push({ dateOfFIR: { $gte: startDate, $lte: endDate } });
+                    dateConditions.push({ dateOfFiling: { $gte: startDate, $lte: endDate } });
+                } else if (startDate) {
+                    dateConditions.push({ dateOfFIR: { $gte: startDate } });
+                    dateConditions.push({ dateOfFiling: { $gte: startDate } });
+                } else if (endDate) {
+                    dateConditions.push({ dateOfFIR: { $lte: endDate } });
+                    dateConditions.push({ dateOfFiling: { $lte: endDate } });
+                }
+                if (dateConditions.length > 0) {
+                    conditions.push({ $or: dateConditions });
+                }
+            }
+            
+            // Apply branch filter
+            if (branch) {
+                conditions.push({
+                    $or: [
+                        { branchName: branch },
+                        { branch: branch }
+                    ]
+                });
+            }
+            
+            // Combine all conditions with $and
+            if (conditions.length > 0) {
+                matchStage.$and = conditions;
+            }
+
             const agg = await FIRModel.aggregate([
-                // No email filter - get all FIRs
+                ...(Object.keys(matchStage).length > 0 ? [{ $match: matchStage }] : []),
                 {
                     $facet: {
                         statusCounts: [
@@ -249,10 +370,47 @@ const AdminService: IAdminService = {
         }
     },
 
-    async getAdminCityGraph(): Promise<any> {
+    async getAdminCityGraph(startDate?: Date, endDate?: Date, branch?: string): Promise<any> {
         try {
+            // Build match stage for filters
+            const matchStage: any = {};
+            const conditions: any[] = [];
+            
+            // Apply date range filter
+            if (startDate || endDate) {
+                const dateConditions: any[] = [];
+                if (startDate && endDate) {
+                    dateConditions.push({ dateOfFIR: { $gte: startDate, $lte: endDate } });
+                    dateConditions.push({ dateOfFiling: { $gte: startDate, $lte: endDate } });
+                } else if (startDate) {
+                    dateConditions.push({ dateOfFIR: { $gte: startDate } });
+                    dateConditions.push({ dateOfFiling: { $gte: startDate } });
+                } else if (endDate) {
+                    dateConditions.push({ dateOfFIR: { $lte: endDate } });
+                    dateConditions.push({ dateOfFiling: { $lte: endDate } });
+                }
+                if (dateConditions.length > 0) {
+                    conditions.push({ $or: dateConditions });
+                }
+            }
+            
+            // Apply branch filter
+            if (branch) {
+                conditions.push({
+                    $or: [
+                        { branchName: branch },
+                        { branch: branch }
+                    ]
+                });
+            }
+            
+            // Combine all conditions with $and
+            if (conditions.length > 0) {
+                matchStage.$and = conditions;
+            }
+            
             return await FIRModel.aggregate([
-                // No email filter - get all FIRs
+                ...(Object.keys(matchStage).length > 0 ? [{ $match: matchStage }] : []),
                 {
                     $group: {
                         _id: { $ifNull: ['$branchName', '$branch'] },
@@ -273,12 +431,49 @@ const AdminService: IAdminService = {
         }
     },
 
-    async getAdminWritTypeDistribution(): Promise<Array<{ type: string, count: number }>> {
+    async getAdminWritTypeDistribution(startDate?: Date, endDate?: Date, branch?: string): Promise<Array<{ type: string, count: number }>> {
         try {
             const allWritTypes = ['BAIL', 'QUASHING', 'DIRECTION', 'SUSPENSION_OF_SENTENCE', 'PAROLE', 'ANY_OTHER'];
             
+            // Build match stage for filters
+            const matchStage: any = {};
+            const conditions: any[] = [];
+            
+            // Apply date range filter
+            if (startDate || endDate) {
+                const dateConditions: any[] = [];
+                if (startDate && endDate) {
+                    dateConditions.push({ dateOfFIR: { $gte: startDate, $lte: endDate } });
+                    dateConditions.push({ dateOfFiling: { $gte: startDate, $lte: endDate } });
+                } else if (startDate) {
+                    dateConditions.push({ dateOfFIR: { $gte: startDate } });
+                    dateConditions.push({ dateOfFiling: { $gte: startDate } });
+                } else if (endDate) {
+                    dateConditions.push({ dateOfFIR: { $lte: endDate } });
+                    dateConditions.push({ dateOfFiling: { $lte: endDate } });
+                }
+                if (dateConditions.length > 0) {
+                    conditions.push({ $or: dateConditions });
+                }
+            }
+            
+            // Apply branch filter
+            if (branch) {
+                conditions.push({
+                    $or: [
+                        { branchName: branch },
+                        { branch: branch }
+                    ]
+                });
+            }
+            
+            // Combine all conditions with $and
+            if (conditions.length > 0) {
+                matchStage.$and = conditions;
+            }
+            
             const distribution = await FIRModel.aggregate([
-                // No email filter - get all FIRs
+                ...(Object.keys(matchStage).length > 0 ? [{ $match: matchStage }] : []),
                 {
                     $group: {
                         _id: '$writType',
@@ -307,15 +502,65 @@ const AdminService: IAdminService = {
         }
     },
 
-    async getAdminMotionMetrics(): Promise<{ filed: number, pending: number, overdue: number }> {
+    async getAdminMotionMetrics(startDate?: Date, endDate?: Date, branch?: string): Promise<{ filed: number, pending: number, overdue: number }> {
         try {
             const now = new Date();
             
-            // Get all filed motions across all users
-            const filedMotions = await ProceedingModel.find({
+            // Build FIR query for filters
+            let firIds: any = null;
+            if (startDate || endDate || branch) {
+                const firQuery: any = {};
+                const conditions: any[] = [];
+                
+                // Apply date range filter to FIR
+                if (startDate || endDate) {
+                    const dateConditions: any[] = [];
+                    if (startDate && endDate) {
+                        dateConditions.push({ dateOfFIR: { $gte: startDate, $lte: endDate } });
+                        dateConditions.push({ dateOfFiling: { $gte: startDate, $lte: endDate } });
+                    } else if (startDate) {
+                        dateConditions.push({ dateOfFIR: { $gte: startDate } });
+                        dateConditions.push({ dateOfFiling: { $gte: startDate } });
+                    } else if (endDate) {
+                        dateConditions.push({ dateOfFIR: { $lte: endDate } });
+                        dateConditions.push({ dateOfFiling: { $lte: endDate } });
+                    }
+                    if (dateConditions.length > 0) {
+                        conditions.push({ $or: dateConditions });
+                    }
+                }
+                
+                // Apply branch filter to FIR
+                if (branch) {
+                    conditions.push({
+                        $or: [
+                            { branchName: branch },
+                            { branch: branch }
+                        ]
+                    });
+                }
+                
+                if (conditions.length > 0) {
+                    firQuery.$and = conditions;
+                }
+                
+                // Find FIRs matching the filters
+                const matchingFIRs = await FIRModel.find(firQuery).select('_id');
+                firIds = matchingFIRs.map(fir => fir._id);
+            }
+            
+            // Build proceeding query
+            const proceedingQuery: any = {
                 type: 'NOTICE_OF_MOTION',
                 draft: false
-            });
+            };
+            
+            if (firIds !== null) {
+                proceedingQuery.fir = { $in: firIds };
+            }
+            
+            // Get all filed motions across all users (filtered by FIR if needed)
+            const filedMotions = await ProceedingModel.find(proceedingQuery);
 
             let pending = 0;
             let overdue = 0;
@@ -341,15 +586,65 @@ const AdminService: IAdminService = {
         }
     },
 
-    async getAdminAffidavitMetrics(): Promise<{ filed: number, pending: number, overdue: number }> {
+    async getAdminAffidavitMetrics(startDate?: Date, endDate?: Date, branch?: string): Promise<{ filed: number, pending: number, overdue: number }> {
         try {
             const now = new Date();
             
-            // Get all filed affidavits across all users
-            const filedAffidavits = await ProceedingModel.find({
+            // Build FIR query for filters
+            let firIds: any = null;
+            if (startDate || endDate || branch) {
+                const firQuery: any = {};
+                const conditions: any[] = [];
+                
+                // Apply date range filter to FIR
+                if (startDate || endDate) {
+                    const dateConditions: any[] = [];
+                    if (startDate && endDate) {
+                        dateConditions.push({ dateOfFIR: { $gte: startDate, $lte: endDate } });
+                        dateConditions.push({ dateOfFiling: { $gte: startDate, $lte: endDate } });
+                    } else if (startDate) {
+                        dateConditions.push({ dateOfFIR: { $gte: startDate } });
+                        dateConditions.push({ dateOfFiling: { $gte: startDate } });
+                    } else if (endDate) {
+                        dateConditions.push({ dateOfFIR: { $lte: endDate } });
+                        dateConditions.push({ dateOfFiling: { $lte: endDate } });
+                    }
+                    if (dateConditions.length > 0) {
+                        conditions.push({ $or: dateConditions });
+                    }
+                }
+                
+                // Apply branch filter to FIR
+                if (branch) {
+                    conditions.push({
+                        $or: [
+                            { branchName: branch },
+                            { branch: branch }
+                        ]
+                    });
+                }
+                
+                if (conditions.length > 0) {
+                    firQuery.$and = conditions;
+                }
+                
+                // Find FIRs matching the filters
+                const matchingFIRs = await FIRModel.find(firQuery).select('_id');
+                firIds = matchingFIRs.map(fir => fir._id);
+            }
+            
+            // Build proceeding query
+            const proceedingQuery: any = {
                 type: 'TO_FILE_REPLY',
                 draft: false
-            });
+            };
+            
+            if (firIds !== null) {
+                proceedingQuery.fir = { $in: firIds };
+            }
+            
+            // Get all filed affidavits across all users (filtered by FIR if needed)
+            const filedAffidavits = await ProceedingModel.find(proceedingQuery);
 
             let pending = 0;
             let overdue = 0;
