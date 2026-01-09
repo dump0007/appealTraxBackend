@@ -304,7 +304,7 @@ const FIRService: IFIRService = {
             throw new Error(error.message);
         }
     },
-    async dashboard(email: string): Promise<any> {
+    async dashboard(email: string, branch?: string, isAdmin?: boolean): Promise<any> {
         try {
             const ongoingStatuses = [
                 'REGISTERED',
@@ -313,8 +313,26 @@ const FIRService: IFIRService = {
                 'CHARGESHEET_FILED',
               ];
           
+            // Build match filter based on user role and branch
+            let matchFilter: any = {};
+            if (isAdmin) {
+                // Admin can see all FIRs - no filter needed
+                matchFilter = {};
+            } else if (branch) {
+                // Regular user: filter by branch
+                matchFilter = {
+                    $or: [
+                        { branchName: branch },
+                        { branch: branch }
+                    ]
+                };
+            } else {
+                // Fallback to email filter for backward compatibility
+                matchFilter = { email };
+            }
+          
               const agg = await FIRModel.aggregate([
-                { $match: { email } }, // Filter by user email
+                { $match: matchFilter },
                 {
                   $facet: {
                     statusCounts: [
@@ -361,10 +379,28 @@ const FIRService: IFIRService = {
             throw new Error(error.message);
         }
     },
-    async cityGraph(email: string): Promise<any> {
+    async cityGraph(email: string, branch?: string, isAdmin?: boolean): Promise<any> {
         try {
-                return await FIRModel.aggregate([
-                { $match: { email } }, // Filter by user email
+            // Build match filter based on user role and branch
+            let matchFilter: any = {};
+            if (isAdmin) {
+                // Admin can see all FIRs - no filter needed
+                matchFilter = {};
+            } else if (branch) {
+                // Regular user: filter by branch
+                matchFilter = {
+                    $or: [
+                        { branchName: branch },
+                        { branch: branch }
+                    ]
+                };
+            } else {
+                // Fallback to email filter for backward compatibility
+                matchFilter = { email };
+            }
+            
+            return await FIRModel.aggregate([
+                { $match: matchFilter },
                 {
                     $group: {
                         _id: { $ifNull: ['$branchName', '$branch'] },
@@ -385,15 +421,32 @@ const FIRService: IFIRService = {
         }
     },
 
-    async search(query: string, email: string): Promise<IFIRModel[]> {
+    async search(query: string, email: string, branch?: string, isAdmin?: boolean): Promise<IFIRModel[]> {
         try {
+            // Build match filter based on user role and branch
+            let baseFilter: any = {};
+            if (isAdmin) {
+                // Admin can see all FIRs - no base filter needed
+                baseFilter = {};
+            } else if (branch) {
+                // Regular user: filter by branch
+                baseFilter = {
+                    $or: [
+                        { branchName: branch },
+                        { branch: branch }
+                    ]
+                };
+            } else {
+                // Fallback to email filter for backward compatibility
+                baseFilter = { email };
+            }
+            
             if (!query || query.trim() === '') {
-                return await FIRModel.find({ email }).limit(100).sort({ dateOfFIR: -1, createdAt: -1 });
+                return await FIRModel.find(baseFilter).limit(100).sort({ dateOfFIR: -1, createdAt: -1 });
             }
 
             const searchRegex = new RegExp(query.trim(), 'i');
-            return await FIRModel.find({
-                email, // Filter by user email
+            const searchFilter = {
                 $or: [
                     { firNumber: searchRegex },
                     { petitionerName: searchRegex },
@@ -405,18 +458,43 @@ const FIRService: IFIRService = {
                     { policeStation: searchRegex },
                     { writNumber: searchRegex },
                 ],
-            }).limit(50).sort({ dateOfFIR: -1, createdAt: -1 });
+            };
+            
+            // Combine base filter with search filter
+            const combinedFilter = isAdmin 
+                ? searchFilter 
+                : { ...baseFilter, ...searchFilter };
+            
+            return await FIRModel.find(combinedFilter).limit(50).sort({ dateOfFIR: -1, createdAt: -1 });
         } catch (error) {
             throw new Error(error.message);
         }
     },
 
-    async writTypeDistribution(email: string): Promise<Array<{ type: string, count: number }>> {
+    async writTypeDistribution(email: string, branch?: string, isAdmin?: boolean): Promise<Array<{ type: string, count: number }>> {
         try {
             const allWritTypes = ['BAIL', 'QUASHING', 'DIRECTION', 'SUSPENSION_OF_SENTENCE', 'PAROLE', 'ANY_OTHER'];
             
+            // Build match filter based on user role and branch
+            let matchFilter: any = {};
+            if (isAdmin) {
+                // Admin can see all FIRs - no filter needed
+                matchFilter = {};
+            } else if (branch) {
+                // Regular user: filter by branch
+                matchFilter = {
+                    $or: [
+                        { branchName: branch },
+                        { branch: branch }
+                    ]
+                };
+            } else {
+                // Fallback to email filter for backward compatibility
+                matchFilter = { email };
+            }
+            
             const distribution = await FIRModel.aggregate([
-                { $match: { email } }, // Filter by user email
+                { $match: matchFilter },
                 {
                     $group: {
                         _id: '$writType',

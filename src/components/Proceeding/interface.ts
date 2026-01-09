@@ -8,8 +8,8 @@ export interface IProceedingService {
     insert(body: IProceedingModel, email: string): Promise<IProceedingModel>;
     update(id: string, body: IProceedingModel, email: string, filesToDelete?: string[], branch?: string, isAdmin?: boolean): Promise<IProceedingModel>;
     remove(id: string, email: string, branch?: string, isAdmin?: boolean): Promise<IProceedingModel>;
-    motionMetrics(email: string): Promise<{ filed: number, pending: number, overdue: number }>;
-    affidavitMetrics(email: string): Promise<{ filed: number, pending: number, overdue: number }>;
+    motionMetrics(email: string, branch?: string, isAdmin?: boolean): Promise<{ filed: number, pending: number, overdue: number }>;
+    affidavitMetrics(email: string, branch?: string, isAdmin?: boolean): Promise<{ filed: number, pending: number, overdue: number }>;
 }
 
 

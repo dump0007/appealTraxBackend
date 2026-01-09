@@ -6,10 +6,10 @@ export interface IFIRService {
     insert(body: IFIRModel, email: string): Promise<IFIRModel>;
     update(id: string, body: IFIRModel, email: string, branch?: string, isAdmin?: boolean): Promise<IFIRModel>;
     remove(id: string, email: string, branch?: string, isAdmin?: boolean): Promise<IFIRModel>;
-    dashboard(email: string): Promise<any>;
-    cityGraph(email: string): Promise<any>;
-    search(query: string, email: string): Promise<IFIRModel[]>;
-    writTypeDistribution(email: string): Promise<Array<{ type: string, count: number }>>;
+    dashboard(email: string, branch?: string, isAdmin?: boolean): Promise<any>;
+    cityGraph(email: string, branch?: string, isAdmin?: boolean): Promise<any>;
+    search(query: string, email: string, branch?: string, isAdmin?: boolean): Promise<IFIRModel[]>;
+    writTypeDistribution(email: string, branch?: string, isAdmin?: boolean): Promise<Array<{ type: string, count: number }>>;
 }
 
 

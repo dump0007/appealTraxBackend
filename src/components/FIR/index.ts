@@ -155,10 +155,14 @@ export async function remove(req: RequestWithUser, res: Response, next: NextFunc
 export async function dashboard(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
         const email = req.email || (req.user as any)?.email;
+        const branch = req.branch;
+        const role = req.role;
+        const isAdmin = role === 'ADMIN';
+        
         if (!email) {
             return next(new HttpError(401, 'User email not found in token'));
         }
-        const fir: any = await FIRService.dashboard(email);
+        const fir: any = await FIRService.dashboard(email, branch, isAdmin);
         res.status(200).json(fir);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
@@ -169,10 +173,14 @@ export async function dashboard(req: RequestWithUser, res: Response, next: NextF
 export async function cityGraph(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
         const email = req.email || (req.user as any)?.email;
+        const branch = req.branch;
+        const role = req.role;
+        const isAdmin = role === 'ADMIN';
+        
         if (!email) {
             return next(new HttpError(401, 'User email not found in token'));
         }
-        const graph: any = await FIRService.cityGraph(email);
+        const graph: any = await FIRService.cityGraph(email, branch, isAdmin);
         res.status(200).json(graph);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
@@ -182,11 +190,15 @@ export async function cityGraph(req: RequestWithUser, res: Response, next: NextF
 export async function search(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
         const email = req.email || (req.user as any)?.email;
+        const branch = req.branch;
+        const role = req.role;
+        const isAdmin = role === 'ADMIN';
+        
         if (!email) {
             return next(new HttpError(401, 'User email not found in token'));
         }
         const query: string = req.query.q as string || '';
-        const firs: IFIRModel[] = await FIRService.search(query, email);
+        const firs: IFIRModel[] = await FIRService.search(query, email, branch, isAdmin);
         res.status(200).json(firs);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
@@ -196,10 +208,14 @@ export async function search(req: RequestWithUser, res: Response, next: NextFunc
 export async function writTypeDistribution(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
         const email = req.email || (req.user as any)?.email;
+        const branch = req.branch;
+        const role = req.role;
+        const isAdmin = role === 'ADMIN';
+        
         if (!email) {
             return next(new HttpError(401, 'User email not found in token'));
         }
-        const distribution = await FIRService.writTypeDistribution(email);
+        const distribution = await FIRService.writTypeDistribution(email, branch, isAdmin);
         res.status(200).json(distribution);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));

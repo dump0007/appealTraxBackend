@@ -834,16 +834,36 @@ const ProceedingService: IProceedingService = {
         }
     },
 
-    async motionMetrics(email: string): Promise<{ filed: number, pending: number, overdue: number }> {
+    async motionMetrics(email: string, branch?: string, isAdmin?: boolean): Promise<{ filed: number, pending: number, overdue: number }> {
         try {
             const now = new Date();
             
-            // Get all filed motions (draft: false AND type: 'NOTICE_OF_MOTION')
-            const filedMotions = await ProceedingModel.find({
-                email,
+            // Build filter based on user role and branch
+            let filter: any = {
                 type: 'NOTICE_OF_MOTION',
                 draft: false
-            });
+            };
+            
+            if (isAdmin) {
+                // Admin can see all motions - no additional filter needed
+            } else if (branch) {
+                // Regular user: get all FIRs in their branch, then filter proceedings for those FIRs
+                const FIRModel = (await import('../FIR/model')).default;
+                const firs = await FIRModel.find({
+                    $or: [
+                        { branchName: branch },
+                        { branch: branch }
+                    ]
+                }).select('_id');
+                const firIds = firs.map(f => f._id);
+                filter.fir = { $in: firIds };
+            } else {
+                // Fallback: filter by email
+                filter.email = email;
+            }
+            
+            // Get all filed motions (draft: false AND type: 'NOTICE_OF_MOTION')
+            const filedMotions = await ProceedingModel.find(filter);
 
             let pending = 0;
             let overdue = 0;
@@ -870,16 +890,36 @@ const ProceedingService: IProceedingService = {
         }
     },
 
-    async affidavitMetrics(email: string): Promise<{ filed: number, pending: number, overdue: number }> {
+    async affidavitMetrics(email: string, branch?: string, isAdmin?: boolean): Promise<{ filed: number, pending: number, overdue: number }> {
         try {
             const now = new Date();
             
-            // Get all filed affidavits (draft: false AND type: 'TO_FILE_REPLY')
-            const filedAffidavits = await ProceedingModel.find({
-                email,
+            // Build filter based on user role and branch
+            let filter: any = {
                 type: 'TO_FILE_REPLY',
                 draft: false
-            });
+            };
+            
+            if (isAdmin) {
+                // Admin can see all affidavits - no additional filter needed
+            } else if (branch) {
+                // Regular user: get all FIRs in their branch, then filter proceedings for those FIRs
+                const FIRModel = (await import('../FIR/model')).default;
+                const firs = await FIRModel.find({
+                    $or: [
+                        { branchName: branch },
+                        { branch: branch }
+                    ]
+                }).select('_id');
+                const firIds = firs.map(f => f._id);
+                filter.fir = { $in: firIds };
+            } else {
+                // Fallback: filter by email
+                filter.email = email;
+            }
+            
+            // Get all filed affidavits (draft: false AND type: 'TO_FILE_REPLY')
+            const filedAffidavits = await ProceedingModel.find(filter);
 
             let pending = 0;
             let overdue = 0;

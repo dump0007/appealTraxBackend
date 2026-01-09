@@ -905,10 +905,14 @@ export async function remove(req: RequestWithUser, res: Response, next: NextFunc
 export async function motionMetrics(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
         const email = req.email || (req.user as any)?.email;
+        const branch = req.branch;
+        const role = req.role;
+        const isAdmin = role === 'ADMIN';
+        
         if (!email) {
             return next(new HttpError(401, 'User email not found in token'));
         }
-        const metrics = await ProceedingService.motionMetrics(email);
+        const metrics = await ProceedingService.motionMetrics(email, branch, isAdmin);
         res.status(200).json(metrics);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
@@ -918,10 +922,14 @@ export async function motionMetrics(req: RequestWithUser, res: Response, next: N
 export async function affidavitMetrics(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
         const email = req.email || (req.user as any)?.email;
+        const branch = req.branch;
+        const role = req.role;
+        const isAdmin = role === 'ADMIN';
+        
         if (!email) {
             return next(new HttpError(401, 'User email not found in token'));
         }
-        const metrics = await ProceedingService.affidavitMetrics(email);
+        const metrics = await ProceedingService.affidavitMetrics(email, branch, isAdmin);
         res.status(200).json(metrics);
     } catch (error) {
         next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));

@@ -1,79 +1,81 @@
 import { NextFunction, Request, Response } from 'express';
-import HttpError from '../../config/error';
 import BranchService from './service';
-import { RequestWithUser } from '../../config/middleware/jwtAuth';
+import { HttpError } from '../../config/error';
 
 /**
  * Get all branches
  */
-export async function getAllBranches(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
+export async function getAllBranches(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-        const branches = await BranchService.getAllBranches();
+        const branches: string[] = await BranchService.getAllBranches();
         res.status(200).json(branches);
     } catch (error) {
-        next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
+        next(new HttpError(error.status || 500, error.message || 'Failed to get branches'));
     }
 }
 
 /**
- * Create new branch
+ * Create a new branch
  */
-export async function createBranch(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
+export async function createBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         const { name } = req.body;
         if (!name) {
             return next(new HttpError(400, 'Branch name is required'));
         }
-        const branches = await BranchService.createBranch(name);
+        const branches: string[] = await BranchService.createBranch(name);
         res.status(201).json(branches);
     } catch (error) {
-        next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
+        next(new HttpError(error.status || 500, error.message || 'Failed to create branch'));
     }
 }
 
 /**
- * Update branch name
+ * Update a branch
  */
-export async function updateBranch(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
+export async function updateBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         const { name: oldName } = req.params;
         const { name: newName } = req.body;
-        if (!newName) {
-            return next(new HttpError(400, 'New branch name is required'));
+        if (!oldName || !newName) {
+            return next(new HttpError(400, 'Both old and new branch names are required'));
         }
-        const branches = await BranchService.updateBranch(oldName, newName);
+        const branches: string[] = await BranchService.updateBranch(oldName, newName);
         res.status(200).json(branches);
     } catch (error) {
-        next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
+        next(new HttpError(error.status || 500, error.message || 'Failed to update branch'));
     }
 }
 
 /**
- * Check deletion impact
+ * Check branch deletion (returns count of FIRs and proceedings linked to this branch)
  */
-export async function checkBranchDeletion(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
+export async function checkBranchDeletion(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         const { name } = req.params;
-        const impact = await BranchService.checkBranchDeletion(name);
-        res.status(200).json(impact);
+        if (!name) {
+            return next(new HttpError(400, 'Branch name is required'));
+        }
+        const counts = await BranchService.checkBranchDeletion(name);
+        res.status(200).json(counts);
     } catch (error) {
-        next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
+        next(new HttpError(error.status || 500, error.message || 'Failed to check branch deletion'));
     }
 }
 
 /**
- * Delete branch and all related data
+ * Delete a branch and all associated data
  */
-export async function deleteBranch(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
+export async function deleteBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         const { name } = req.params;
+        if (!name) {
+            return next(new HttpError(400, 'Branch name is required'));
+        }
         await BranchService.deleteBranchWithData(name);
-        res.status(200).json({ message: 'Branch and all related data deleted successfully' });
+        res.status(200).json({ message: 'Branch and all associated data deleted successfully' });
     } catch (error) {
-        next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
+        next(new HttpError(error.status || 500, error.message || 'Failed to delete branch'));
     }
 }
-
-
-
 
