@@ -416,10 +416,12 @@ const ProceedingService: IProceedingService = {
             const isAdmin = user && user.role === 'ADMIN';
             
             // Verify the FIR belongs to this user (or allow admin to create for any FIR)
+            // Admin access: Admins can create proceedings for any FIR without restrictions
+            // Regular user: Can only create proceedings for FIRs they own (filtered by email)
             const FIRModel = (await import('../FIR/model')).default;
             let fir;
             if (isAdmin) {
-                // Admin can create proceedings for any FIR
+                // Admin can create proceedings for any FIR - no restrictions
                 fir = await FIRModel.findById(body.fir);
                 if (!fir) {
                     throw new Error('FIR not found');
@@ -530,6 +532,12 @@ const ProceedingService: IProceedingService = {
         }
     },
 
+    /**
+     * Update proceeding
+     * Admin access: Admins can update any proceeding without restrictions (no branch/email filters applied)
+     * Regular user with branch: Can only update proceedings for FIRs in their branch (verified via FIR branch check)
+     * Regular user without branch: Can only update proceedings they own (filtered by email)
+     */
     async update(id: string, body: IProceedingModel, email: string, filesToDelete?: string[], branch?: string, isAdmin?: boolean): Promise<IProceedingModel> {
         try {
             const validate: Joi.ValidationResult = ProceedingValidation.byId({ id });
@@ -540,6 +548,7 @@ const ProceedingService: IProceedingService = {
             // Find existing proceeding
             let existingProceeding;
             if (isAdmin) {
+                // Admin can update any proceeding - no restrictions
                 existingProceeding = await ProceedingModel.findById(new Types.ObjectId(id));
             } else if (branch) {
                 existingProceeding = await ProceedingModel.findById(new Types.ObjectId(id));
@@ -740,11 +749,11 @@ const ProceedingService: IProceedingService = {
             }
 
             // Update proceeding
-            let query: any = { _id: new Types.ObjectId(id) };
-            if (!isAdmin && !branch) {
-                // Fallback: filter by email
-                query.email = email;
-            }
+            // Access has already been verified above, so we can update by ID
+            // Admin: can update any proceeding (already verified above)
+            // User with branch: access verified via FIR branch check above
+            // User without branch: access verified via email check above
+            const query: any = { _id: new Types.ObjectId(id) };
             
             const updatedProceeding = await ProceedingModel.findOneAndUpdate(
                 query,
@@ -794,6 +803,12 @@ const ProceedingService: IProceedingService = {
         }
     },
 
+    /**
+     * Remove proceeding
+     * Admin access: Admins can delete any proceeding without restrictions (no branch/email filters applied)
+     * Regular user with branch: Can only delete proceedings for FIRs in their branch (verified via FIR branch check)
+     * Regular user without branch: Can only delete proceedings they own (filtered by email)
+     */
     async remove(id: string, email: string, branch?: string, isAdmin?: boolean): Promise<IProceedingModel> {
         try {
             const validate: Joi.ValidationResult = ProceedingValidation.byId({ id });
@@ -804,6 +819,7 @@ const ProceedingService: IProceedingService = {
             // Verify proceeding access
             let proceeding;
             if (isAdmin) {
+                // Admin can delete any proceeding - no restrictions
                 proceeding = await ProceedingModel.findById(new Types.ObjectId(id));
             } else if (branch) {
                 proceeding = await ProceedingModel.findById(new Types.ObjectId(id));

@@ -468,7 +468,7 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
         }
 
         // Fetch existing proceeding to preserve existing files
-        const existingProceeding = await ProceedingService.findOne(req.params.id, email);
+        const existingProceeding = await ProceedingService.findOne(req.params.id, email, branch, isAdmin);
         if (!existingProceeding) {
             return next(new HttpError(404, 'Proceeding not found'));
         }

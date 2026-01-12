@@ -176,6 +176,11 @@ const FIRService: IFIRService = {
         }
     },
 
+    /**
+     * Update FIR
+     * Admin access: Admins can update any FIR without restrictions (no branch/email filters applied)
+     * Regular user: Can only update FIRs in their branch (filtered by branchName or branch field)
+     */
     async update(id: string, body: IFIRModel, email: string, branch?: string, isAdmin?: boolean): Promise<IFIRModel> {
         try {
             const validate: Joi.ValidationResult = FIRValidation.byId({ id });
@@ -241,7 +246,7 @@ const FIRService: IFIRService = {
             let query: any = { _id: new Types.ObjectId(id) };
             
             if (isAdmin) {
-                // Admin can update any FIR
+                // Admin can update any FIR - no restrictions
                 // No additional query filter needed
             } else if (branch) {
                 // Regular user: verify FIR belongs to their branch
@@ -268,6 +273,11 @@ const FIRService: IFIRService = {
         }
     },
 
+    /**
+     * Remove FIR
+     * Admin access: Admins can delete any FIR without restrictions (no branch/email filters applied)
+     * Regular user: Can only delete FIRs in their branch (filtered by branchName or branch field)
+     */
     async remove(id: string, email: string, branch?: string, isAdmin?: boolean): Promise<IFIRModel> {
         try {
             const validate: Joi.ValidationResult = FIRValidation.byId({ id });
@@ -278,7 +288,7 @@ const FIRService: IFIRService = {
             let query: any = { _id: new Types.ObjectId(id) };
             
             if (isAdmin) {
-                // Admin can delete any FIR
+                // Admin can delete any FIR - no restrictions
                 // No additional query filter needed
             } else if (branch) {
                 // Regular user: verify FIR belongs to their branch
