@@ -359,7 +359,9 @@ export async function create(req: RequestWithUser, res: Response, next: NextFunc
         }
 
         const branch = req.branch;
-        const item: IProceedingModel = await ProceedingService.insert(body, email);
+        const role = req.role;
+        const isAdmin = role === 'ADMIN';
+        const item: IProceedingModel = await ProceedingService.insert(body, email, branch, isAdmin);
         
         // Create audit log
         try {

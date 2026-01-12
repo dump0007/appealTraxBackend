@@ -32,8 +32,8 @@ const ProceedingService: IProceedingService = {
                     .populate('fir')
                     .populate('createdBy');
             } else {
-                // Fallback: filter by email
-                return await ProceedingModel.find({ email, draft: false })
+                // No branch assigned - return empty results
+                return await ProceedingModel.find({ _id: { $exists: false } })
                     .sort({ fir: 1, sequence: 1 })
                     .populate('fir')
                     .populate('createdBy');
@@ -72,27 +72,19 @@ const ProceedingService: IProceedingService = {
                     throw new Error('FIR not found or access denied');
                 }
             } else {
-                // Fallback: verify FIR ownership by email
-                fir = await FIRModel.findOne({ _id: new Types.ObjectId(firId), email });
-                if (!fir) {
-                    throw new Error('FIR not found or access denied');
-                }
+                // No branch assigned - return empty results
+                return await ProceedingModel.find({ _id: { $exists: false } })
+                    .sort({ sequence: 1 })
+                    .populate('fir')
+                    .populate('createdBy');
             }
             
             // Only return non-draft proceedings
-            if (isAdmin || branch) {
-                // Admin or branch-based access: show all proceedings for this FIR
-                return await ProceedingModel.find({ fir: new Types.ObjectId(firId), draft: false })
-                    .sort({ sequence: 1 })
-                    .populate('fir')
-                    .populate('createdBy');
-            } else {
-                // Fallback: filter by email
-                return await ProceedingModel.find({ fir: new Types.ObjectId(firId), email, draft: false })
-                    .sort({ sequence: 1 })
-                    .populate('fir')
-                    .populate('createdBy');
-            }
+            // Admin or branch-based access: show all proceedings for this FIR
+            return await ProceedingModel.find({ fir: new Types.ObjectId(firId), draft: false })
+                .sort({ sequence: 1 })
+                .populate('fir')
+                .populate('createdBy');
         } catch (error) {
             throw new Error(error.message);
         }
@@ -129,13 +121,8 @@ const ProceedingService: IProceedingService = {
                     throw new Error('Proceeding not found or access denied');
                 }
             } else {
-                // Fallback: verify ownership by email
-                proceeding = await ProceedingModel.findOne({ _id: new Types.ObjectId(id), email })
-                    .populate('fir')
-                    .populate('createdBy');
-                if (!proceeding) {
-                    throw new Error('Proceeding not found or access denied');
-                }
+                // No branch assigned - access denied
+                throw new Error('Proceeding not found or access denied');
             }
             return proceeding;
         } catch (error) {
@@ -172,30 +159,20 @@ const ProceedingService: IProceedingService = {
                     throw new Error('FIR not found or access denied');
                 }
             } else {
-                // Fallback: verify FIR ownership by email
-                fir = await FIRModel.findOne({ _id: new Types.ObjectId(firId), email });
-                if (!fir) {
-                    throw new Error('FIR not found or access denied');
-                }
+                // No branch assigned - return null
+                return null;
             }
             
-            if (isAdmin || branch) {
-                // Admin or branch-based access: show any draft for this FIR
-                return await ProceedingModel.findOne({ fir: new Types.ObjectId(firId), draft: true })
-                    .populate('fir')
-                    .populate('createdBy');
-            } else {
-                // Fallback: filter by email
-                return await ProceedingModel.findOne({ fir: new Types.ObjectId(firId), email, draft: true })
-                    .populate('fir')
-                    .populate('createdBy');
-            }
+            // Admin or branch-based access: show any draft for this FIR
+            return await ProceedingModel.findOne({ fir: new Types.ObjectId(firId), draft: true })
+                .populate('fir')
+                .populate('createdBy');
         } catch (error) {
             throw new Error(error.message);
         }
     },
 
-    async insert(body: IProceedingModel, email: string): Promise<IProceedingModel> {
+    async insert(body: IProceedingModel, email: string, branch?: string, isAdmin?: boolean): Promise<IProceedingModel> {
         try {
             // Clean up empty date strings and empty objects before validation
             // Handle both single object and array of noticeOfMotion
@@ -417,7 +394,7 @@ const ProceedingService: IProceedingService = {
             
             // Verify the FIR belongs to this user (or allow admin to create for any FIR)
             // Admin access: Admins can create proceedings for any FIR without restrictions
-            // Regular user: Can only create proceedings for FIRs they own (filtered by email)
+            // Regular user: Can only create proceedings for FIRs in their branch (filtered by branch)
             const FIRModel = (await import('../FIR/model')).default;
             let fir;
             if (isAdmin) {
@@ -428,14 +405,23 @@ const ProceedingService: IProceedingService = {
                 }
                 // Associate proceeding with FIR owner's email (not admin's email)
                 body.email = fir.email;
-            } else {
-                // Regular user: verify FIR ownership
-                fir = await FIRModel.findOne({ _id: body.fir, email });
+            } else if (branch) {
+                // Regular user: verify FIR belongs to their branch
+                fir = await FIRModel.findOne({
+                    _id: body.fir,
+                    $or: [
+                        { branchName: branch },
+                        { branch: branch }
+                    ]
+                });
                 if (!fir) {
                     throw new Error('FIR not found or access denied');
                 }
                 // Set email from token
                 body.email = email;
+            } else {
+                // No branch assigned - access denied
+                throw new Error('FIR not found or access denied');
             }
             
             // If this is a draft, check if a draft already exists for this FIR

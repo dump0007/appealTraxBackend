@@ -5,7 +5,7 @@ export interface IProceedingService {
     findByFIR(firId: string, email: string, branch?: string, isAdmin?: boolean): Promise<IProceedingModel[]>;
     findOne(id: string, email: string, branch?: string, isAdmin?: boolean): Promise<IProceedingModel>;
     findDraftByFIR(firId: string, email: string, branch?: string, isAdmin?: boolean): Promise<IProceedingModel | null>;
-    insert(body: IProceedingModel, email: string): Promise<IProceedingModel>;
+    insert(body: IProceedingModel, email: string, branch?: string, isAdmin?: boolean): Promise<IProceedingModel>;
     update(id: string, body: IProceedingModel, email: string, filesToDelete?: string[], branch?: string, isAdmin?: boolean): Promise<IProceedingModel>;
     remove(id: string, email: string, branch?: string, isAdmin?: boolean): Promise<IProceedingModel>;
     motionMetrics(email: string, branch?: string, isAdmin?: boolean): Promise<{ filed: number, pending: number, overdue: number }>;
