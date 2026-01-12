@@ -34,15 +34,18 @@ const AdminService: IAdminService = {
                 throw new Error('Email and password are required');
             }
 
+            // Normalize email to lowercase before checking existence and saving
+            const normalizedEmail = userData.email.toLowerCase();
+
             // Check if user already exists
-            const existingUser = await UserModel.findOne({ email: userData.email });
+            const existingUser = await UserModel.findOne({ email: normalizedEmail });
             if (existingUser) {
                 throw new Error('User with this email already exists');
             }
 
             // Create user with plain password - User model's pre-save hook will hash it
             const user = new UserModel({
-                email: userData.email,
+                email: normalizedEmail,
                 password: userData.password, // Plain password - pre-save hook will hash it
                 role: userData.role || 'USER',
                 branch: userData.branch || '',
@@ -81,7 +84,10 @@ const AdminService: IAdminService = {
             }
 
             // Update fields
-            if (userData.email !== undefined) user.email = userData.email;
+            if (userData.email !== undefined) {
+                // Normalize email to lowercase when updating
+                user.email = userData.email.toLowerCase();
+            }
             if (userData.role !== undefined) user.role = userData.role;
             
             // Handle branch update with validation

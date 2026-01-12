@@ -858,8 +858,8 @@ const ProceedingService: IProceedingService = {
                 const firIds = firs.map(f => f._id);
                 filter.fir = { $in: firIds };
             } else {
-                // Fallback: filter by email
-                filter.email = email;
+                // No branch assigned - return empty results
+                filter.fir = { $exists: false };
             }
             
             // Get all filed motions (draft: false AND type: 'NOTICE_OF_MOTION')
@@ -914,8 +914,8 @@ const ProceedingService: IProceedingService = {
                 const firIds = firs.map(f => f._id);
                 filter.fir = { $in: firIds };
             } else {
-                // Fallback: filter by email
-                filter.email = email;
+                // No branch assigned - return empty results
+                filter.fir = { $exists: false };
             }
             
             // Get all filed affidavits (draft: false AND type: 'TO_FILE_REPLY')

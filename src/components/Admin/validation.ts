@@ -28,7 +28,7 @@ class AuthValidation extends Validation {
             password: Joi.string().required(),
             email: Joi.string().email({
                 minDomainSegments: 2,
-            }).required(),
+            }).lowercase().required(),
         });
 
         return schema.validate(params);
@@ -49,7 +49,7 @@ class AuthValidation extends Validation {
             password: Joi.string().required(),
             email: Joi.string().email({
                 minDomainSegments: 2,
-            }).required(),
+            }).lowercase().required(),
         });
 
         return schema.validate(params);

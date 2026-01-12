@@ -21,8 +21,8 @@ const FIRService: IFIRService = {
                     ]
                 });
             } else {
-                // Fallback to email filter for backward compatibility
-                firs = await FIRModel.find({ email });
+                // No branch assigned - return empty results
+                firs = await FIRModel.find({ _id: { $exists: false } });
             }
             
             // Populate proceedings - for branch-based access, show all proceedings for FIRs in branch
@@ -40,12 +40,8 @@ const FIRService: IFIRService = {
                         options: { sort: { sequence: 1 } }
                     });
                 } else {
-                    // Fallback: filter by email
-                    await fir.populate({
-                        path: 'proceedings',
-                        match: { email },
-                        options: { sort: { sequence: 1 } }
-                    });
+                    // No branch assigned - no proceedings to show
+                    // (firs will be empty, so this won't execute)
                 }
             }
             return firs;
@@ -327,8 +323,8 @@ const FIRService: IFIRService = {
                     ]
                 };
             } else {
-                // Fallback to email filter for backward compatibility
-                matchFilter = { email };
+                // No branch assigned - return empty results
+                matchFilter = { _id: { $exists: false } };
             }
           
               const agg = await FIRModel.aggregate([
@@ -395,8 +391,8 @@ const FIRService: IFIRService = {
                     ]
                 };
             } else {
-                // Fallback to email filter for backward compatibility
-                matchFilter = { email };
+                // No branch assigned - return empty results
+                matchFilter = { _id: { $exists: false } };
             }
             
             return await FIRModel.aggregate([
@@ -437,8 +433,8 @@ const FIRService: IFIRService = {
                     ]
                 };
             } else {
-                // Fallback to email filter for backward compatibility
-                baseFilter = { email };
+                // No branch assigned - return empty results
+                baseFilter = { _id: { $exists: false } };
             }
             
             if (!query || query.trim() === '') {
@@ -489,8 +485,8 @@ const FIRService: IFIRService = {
                     ]
                 };
             } else {
-                // Fallback to email filter for backward compatibility
-                matchFilter = { email };
+                // No branch assigned - return empty results
+                matchFilter = { _id: { $exists: false } };
             }
             
             const distribution = await FIRModel.aggregate([

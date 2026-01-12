@@ -56,8 +56,11 @@ const AuthService: IAuthService = {
                 throw new Error(validate.error.message);
             }
 
+            // Normalize email to lowercase before database query
+            const normalizedEmail = body.email.toLowerCase();
+
             const user: IUserModel = await UserModel.findOne({
-                email: body.email,
+                email: normalizedEmail,
             });
 
             const isMatched: boolean = user && await user.comparePassword(body.password);
