@@ -68,3 +68,8 @@ ecosystem.config.js
 assets/proceedings
 
 build
+
+
+test
+
+FAILING_TESTS.md

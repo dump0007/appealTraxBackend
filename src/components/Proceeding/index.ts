@@ -3,6 +3,74 @@ import { Types } from 'mongoose';
 import ProceedingService from './service';
 import { HttpError } from '../../config/error';
 import { IProceedingModel } from './model';
+import { logAuditEntry } from '../AuditLog/logger';
+import { IAuditFileInfo } from '../AuditLog/model';
+function extractFilename(fileUrl: string | undefined): string | undefined {
+    if (!fileUrl) return undefined;
+    return fileUrl.replace('/assets/proceedings/', '');
+}
+
+function collectProceedingFiles(proceeding: IProceedingModel, deletedFiles: string[] = []): IAuditFileInfo[] {
+    const files: IAuditFileInfo[] = [];
+
+    // Top-level attachments array
+    if (proceeding.attachments && Array.isArray(proceeding.attachments)) {
+        proceeding.attachments.forEach(att => {
+            const name = extractFilename(att.fileUrl) || att.fileName;
+            if (name) {
+                files.push({ fileName: name, field: 'attachments', action: 'uploaded' });
+            }
+        });
+    }
+
+    // Order of proceeding
+    if (proceeding.orderOfProceedingFilename) {
+        files.push({ fileName: proceeding.orderOfProceedingFilename, field: 'orderOfProceeding', action: 'uploaded' });
+    }
+
+    // Decision details attachment
+    if (proceeding.decisionDetails && (proceeding.decisionDetails as any).attachment) {
+        files.push({ fileName: (proceeding.decisionDetails as any).attachment, field: 'decisionDetails', action: 'uploaded' });
+    }
+
+    const pushEntryAttachment = (entry: any, field: string) => {
+        if (entry && entry.attachment) {
+            files.push({ fileName: entry.attachment, field, action: 'uploaded' });
+        }
+    };
+
+    // noticeOfMotion entries
+    const nomEntries = proceeding.noticeOfMotion
+        ? (Array.isArray(proceeding.noticeOfMotion) ? proceeding.noticeOfMotion : [proceeding.noticeOfMotion])
+        : [];
+    nomEntries.forEach(entry => pushEntryAttachment(entry, 'noticeOfMotion'));
+
+    // replyTracking entries
+    const replyEntries = proceeding.replyTracking
+        ? (Array.isArray(proceeding.replyTracking) ? proceeding.replyTracking : [proceeding.replyTracking])
+        : [];
+    replyEntries.forEach(entry => pushEntryAttachment(entry, 'replyTracking'));
+
+    // argumentDetails entries
+    const argEntries = proceeding.argumentDetails
+        ? (Array.isArray(proceeding.argumentDetails) ? proceeding.argumentDetails : [proceeding.argumentDetails])
+        : [];
+    argEntries.forEach(entry => pushEntryAttachment(entry, 'argumentDetails'));
+
+    // anyOtherDetails entries
+    const anyOtherEntries = proceeding.anyOtherDetails
+        ? (Array.isArray(proceeding.anyOtherDetails) ? proceeding.anyOtherDetails : [proceeding.anyOtherDetails])
+        : [];
+    anyOtherEntries.forEach(entry => pushEntryAttachment(entry, 'anyOtherDetails'));
+
+    // Deleted files context
+    deletedFiles.forEach(name => {
+        files.push({ fileName: name, action: 'deleted' });
+    });
+
+    return files;
+}
+
 import { validateProceedingFile, saveProceedingFile, deleteProceedingFile } from '../../config/middleware/fileUpload';
 import { RequestWithUser } from '../../config/middleware/jwtAuth';
 import AdminService from '../Admin/service';
@@ -362,6 +430,19 @@ export async function create(req: RequestWithUser, res: Response, next: NextFunc
         const role = req.role;
         const isAdmin = role === 'ADMIN';
         const item: IProceedingModel = await ProceedingService.insert(body, email, branch, isAdmin);
+
+        // Audit log - create (soft delete friendly; files retained)
+        logAuditEntry({
+            actorEmail: email,
+            actorRole: role || 'USER',
+            branch,
+            action: 'CREATE',
+            entityType: 'PROCEEDING',
+            entityId: item._id.toString(),
+            payloadSnapshot: item,
+            files: collectProceedingFiles(item),
+            ip: req.ip,
+        });
         
         // Create audit log
         try {
@@ -477,12 +558,22 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
 
         // Preserve existing attachment filenames in proceeding type entries if not being replaced
         const preserveAttachmentInEntry = (existingEntry: any, newEntry: any, index: number) => {
-            if (existingEntry && existingEntry.attachment && (!newEntry || !newEntry.attachment)) {
-                // Only preserve if the file is not marked for deletion
-                if (!filesToDelete.includes(existingEntry.attachment)) {
-                    if (newEntry) {
-                        newEntry.attachment = existingEntry.attachment;
-                    }
+            if (!existingEntry || !existingEntry.attachment) return;
+
+            const isMarkedForDeletion = filesToDelete.includes(existingEntry.attachment);
+
+            // If marked for deletion, clear the attachment reference
+            if (isMarkedForDeletion) {
+                if (newEntry) {
+                    newEntry.attachment = undefined;
+                }
+                return;
+            }
+
+            // Preserve existing attachment only when not marked for deletion and no replacement
+            if (!newEntry || !newEntry.attachment) {
+                if (newEntry) {
+                    newEntry.attachment = existingEntry.attachment;
                 }
             }
         };
@@ -551,12 +642,14 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
             });
         }
 
-        // Preserve attachment in decisionDetails
+        // Preserve attachment in decisionDetails, or clear if marked for deletion
         if (body.decisionDetails && existingProceeding.decisionDetails) {
-            if (existingProceeding.decisionDetails.attachment && !body.decisionDetails.attachment) {
-                // Only preserve if the file is not marked for deletion
-                if (!filesToDelete.includes(existingProceeding.decisionDetails.attachment)) {
-                    body.decisionDetails.attachment = existingProceeding.decisionDetails.attachment;
+            const existingAttachment = existingProceeding.decisionDetails.attachment;
+            if (existingAttachment) {
+                if (filesToDelete.includes(existingAttachment)) {
+                    body.decisionDetails.attachment = undefined;
+                } else if (!body.decisionDetails.attachment) {
+                    body.decisionDetails.attachment = existingAttachment;
                 }
             }
         }
@@ -819,7 +912,12 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
             // Preserve existing orderOfProceedingFilename if no new file uploaded and not marked for deletion
             if (!filesToDelete.includes(existingProceeding.orderOfProceedingFilename)) {
                 body.orderOfProceedingFilename = existingProceeding.orderOfProceedingFilename;
+            } else {
+                body.orderOfProceedingFilename = undefined;
             }
+        } else {
+            // Ensure cleared if previously deleted
+            body.orderOfProceedingFilename = undefined;
         }
 
         // Merge existing attachments with new ones, or preserve existing if no new attachments
@@ -840,6 +938,19 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
         }
 
         const item: IProceedingModel = await ProceedingService.update(req.params.id, body, email, filesToDelete, branch, isAdmin);
+        
+        // Audit log - update (files retained on disk; DB refs cleared)
+        logAuditEntry({
+            actorEmail: email,
+            actorRole: role || 'USER',
+            branch,
+            action: 'UPDATE',
+            entityType: 'PROCEEDING',
+            entityId: item._id.toString(),
+            payloadSnapshot: body,
+            files: collectProceedingFiles(item, filesToDelete),
+            ip: req.ip,
+        });
         
         // Create audit log
         try {
@@ -878,6 +989,19 @@ export async function remove(req: RequestWithUser, res: Response, next: NextFunc
             return next(new HttpError(401, 'User email not found in token'));
         }
         const item: IProceedingModel = await ProceedingService.remove(req.params.id, email, branch, isAdmin);
+
+        // Audit log - delete
+        logAuditEntry({
+            actorEmail: email,
+            actorRole: role || 'USER',
+            branch,
+            action: 'DELETE',
+            entityType: 'PROCEEDING',
+            entityId: req.params.id,
+            payloadSnapshot: item,
+            files: collectProceedingFiles(item),
+            ip: req.ip,
+        });
         
         // Create audit log
         try {

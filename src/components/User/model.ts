@@ -84,9 +84,10 @@ const UserSchema: Schema = new Schema({
     },
     branch: {
         type: String,
-        required: true,
+        required: false, // Made optional, validation handled in pre-save hook
         trim: true,
         index: true,
+        default: '',
     },
     tokens: Array,
 }, {
@@ -94,6 +95,11 @@ const UserSchema: Schema = new Schema({
     versionKey: false,
 }).pre('save', async function (next: NextFunction): Promise < void > {
     const user: IUserModel = this; // tslint:disable-line
+
+    // Validate branch is required for USER role
+    if (user.role === 'USER' && (!user.branch || user.branch.trim() === '')) {
+        return next(new Error('Branch is required for USER role'));
+    }
 
     if (!user.isModified('password')) {
         return next();

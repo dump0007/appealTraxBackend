@@ -56,8 +56,8 @@ const AuthService: IAuthService = {
                 throw new Error(validate.error.message);
             }
 
-            // Normalize email to lowercase before database query
-            const normalizedEmail = body.email.toLowerCase();
+            // Normalize email to lowercase and trim whitespace before database query
+            const normalizedEmail = body.email.toLowerCase().trim();
 
             const user: IUserModel = await UserModel.findOne({
                 email: normalizedEmail,

@@ -4,6 +4,7 @@ import { HttpError } from '../../config/error';
 import { IFIRModel } from './model';
 import { RequestWithUser } from '../../config/middleware/jwtAuth';
 import AdminService from '../Admin/service';
+import { logAuditEntry } from '../AuditLog/logger';
 
 export async function findAll(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -49,6 +50,19 @@ export async function create(req: RequestWithUser, res: Response, next: NextFunc
         }
         const fir: IFIRModel = await FIRService.insert(req.body, email);
         
+        // Audit log - create FIR
+        logAuditEntry({
+            actorEmail: email,
+            actorRole: 'USER',
+            branch,
+            action: 'CREATE',
+            entityType: 'FIR',
+            entityId: fir._id.toString(),
+            payloadSnapshot: fir,
+            files: [],
+            ip: req.ip,
+        });
+        
         // Create audit log
         try {
             await AdminService.createAuditLog(
@@ -88,6 +102,19 @@ export async function update(req: RequestWithUser, res: Response, next: NextFunc
         }
         const fir: IFIRModel = await FIRService.update(req.params.id, req.body, email, branch, isAdmin);
         
+        // Audit log - update FIR
+        logAuditEntry({
+            actorEmail: email,
+            actorRole: role || 'USER',
+            branch,
+            action: 'UPDATE',
+            entityType: 'FIR',
+            entityId: fir._id.toString(),
+            payloadSnapshot: req.body,
+            files: [],
+            ip: req.ip,
+        });
+        
         // Create audit log
         try {
             await AdminService.createAuditLog(
@@ -125,6 +152,19 @@ export async function remove(req: RequestWithUser, res: Response, next: NextFunc
             return next(new HttpError(401, 'User email not found in token'));
         }
         const fir: IFIRModel = await FIRService.remove(req.params.id, email, branch, isAdmin);
+        
+        // Audit log - delete FIR
+        logAuditEntry({
+            actorEmail: email,
+            actorRole: role || 'USER',
+            branch,
+            action: 'DELETE',
+            entityType: 'FIR',
+            entityId: req.params.id,
+            payloadSnapshot: fir,
+            files: [],
+            ip: req.ip,
+        });
         
         // Create audit log
         try {

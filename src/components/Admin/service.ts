@@ -3,7 +3,7 @@ import { Types } from 'mongoose';
 import UserModel, { IUserModel } from '../User/model';
 import FIRModel, { IFIRModel } from '../FIR/model';
 import ProceedingModel, { IProceedingModel } from '../Proceeding/model';
-import AuditLogModel, { IAuditLogModel } from '../AuditLog/model';
+import { LegacyAuditLogModel, IAuditLogModel } from '../AuditLog/model';
 import ConfigModel, { IConfigModel } from '../Config/model';
 import { IAdminService } from './interface';
 
@@ -737,7 +737,7 @@ const AdminService: IAdminService = {
             const limit = filters?.limit || 100;
             const skip = filters?.skip || 0;
             
-            const logs = await AuditLogModel.find(query)
+            const logs = await LegacyAuditLogModel.find(query)
                 .sort({ timestamp: -1 })
                 .limit(limit)
                 .skip(skip)
@@ -784,7 +784,7 @@ const AdminService: IAdminService = {
             const limit = filters?.limit || 100;
             const skip = filters?.skip || 0;
 
-            return await AuditLogModel.find(query)
+            return await LegacyAuditLogModel.find(query)
                 .sort({ timestamp: -1 })
                 .limit(limit)
                 .skip(skip);
@@ -803,7 +803,7 @@ const AdminService: IAdminService = {
         ipAddress?: string
     ): Promise<IAuditLogModel> {
         try {
-            const auditLog = new AuditLogModel({
+            const auditLog = new LegacyAuditLogModel({
                 action,
                 userEmail,
                 userId,

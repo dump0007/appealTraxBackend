@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { AdminComponent, BranchComponent } from '../components';
+import { AdminComponent, BranchComponent, AuditLogComponent } from '../components';
 import { isAuthenticated } from '../config/middleware/jwtAuth';
 import { isAdmin } from '../config/middleware/adminAuth';
 
@@ -44,6 +44,7 @@ router.get('/affidavit-metrics', AdminComponent.getAdminAffidavitMetrics);
  */
 router.get('/audit-logs', AdminComponent.getAuditLogs);
 router.get('/user-logs', AdminComponent.getUserActivityLogs);
+router.get('/audit/operations', AuditLogComponent.getOperationLogs);
 
 /**
  * Config Routes

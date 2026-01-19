@@ -751,19 +751,8 @@ const ProceedingService: IProceedingService = {
                 throw new Error('Proceeding not found or access denied');
             }
 
-            // Delete old files if provided
-            if (filesToDelete && filesToDelete.length > 0) {
-                const { deleteProceedingFile } = await import('../../config/middleware/fileUpload');
-                for (const filename of filesToDelete) {
-                    try {
-                        deleteProceedingFile(filename);
-                        console.log(`[ProceedingService] Deleted file: ${filename}`);
-                    } catch (fileError) {
-                        console.error(`[ProceedingService] Error deleting file ${filename}:`, fileError);
-                        // Don't throw - file deletion failure shouldn't fail the update
-                    }
-                }
-            }
+            // NOTE: Soft-delete behavior - do NOT remove files from disk here.
+            // Files are retained for audit; DB references are cleared in the controller.
 
             // Update FIR status if proceeding has decisionDetails with writStatus
             const writStatus = body.decisionDetails?.writStatus;
