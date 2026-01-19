@@ -69,7 +69,9 @@ const AdminService: IAdminService = {
         try {
             const user = await UserModel.findById(new Types.ObjectId(id));
             if (!user) {
-                throw new Error('User not found');
+                const err: any = new Error('User not found');
+                err.status = 404;
+                throw err;
             }
 
             // Check if trying to convert admin to user
@@ -78,7 +80,9 @@ const AdminService: IAdminService = {
                 if (user.role === 'ADMIN' && userData.role === 'USER') {
                     const adminCount = await this.getAdminCount();
                     if (adminCount <= 1) {
-                        throw new Error('Cannot convert the last admin to user. At least one admin must exist.');
+                        const err: any = new Error('Cannot convert the last admin to user. At least one admin must exist.');
+                        err.status = 400;
+                        throw err;
                     }
                 }
             }
@@ -86,20 +90,24 @@ const AdminService: IAdminService = {
             // Update fields
             if (userData.email !== undefined) {
                 // Normalize email to lowercase when updating
-                user.email = userData.email.toLowerCase();
+                user.email = userData.email.toLowerCase().trim();
             }
             if (userData.role !== undefined) user.role = userData.role;
             
             // Handle branch update with validation
             if (userData.branch !== undefined && userData.branch !== user.branch) {
-                // Check how many users have the current branch
-                const usersWithCurrentBranch = await UserModel.countDocuments({ branch: user.branch });
-                
-                // If only 1 user has this branch (the one being edited), prevent change
-                if (usersWithCurrentBranch <= 1) {
-                    throw new Error('Cannot change branch. This is the only user for this branch.');
+                const remainingInCurrentBranch = await UserModel.countDocuments({
+                    branch: user.branch,
+                    _id: { $ne: user._id },
+                });
+
+                // If only this user is in the branch, block moving them out
+                if (remainingInCurrentBranch <= 0) {
+                    const err: any = new Error('Cannot change branch. This is the only user for this branch.');
+                    err.status = 400;
+                    throw err;
                 }
-                
+
                 user.branch = userData.branch;
             }
 
@@ -110,7 +118,12 @@ const AdminService: IAdminService = {
 
             return await user.save();
         } catch (error) {
-            throw new Error(error.message);
+            if (error?.status) {
+                throw error;
+            }
+            const err: any = new Error(error.message);
+            err.status = 500;
+            throw err;
         }
     },
 
