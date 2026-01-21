@@ -18,42 +18,92 @@ const AdminService: IAdminService = {
 
     async getUserById(id: string): Promise<IUserModel> {
         try {
+            // Validate ObjectId format
+            if (!Types.ObjectId.isValid(id)) {
+                const err: any = new Error('Invalid user ID format');
+                err.status = 400;
+                throw err;
+            }
+            
             const user = await UserModel.findById(new Types.ObjectId(id)).select('-password -passwordResetToken -passwordResetExpires -tokens');
             if (!user) {
-                throw new Error('User not found');
+                const err: any = new Error('User not found');
+                err.status = 404;
+                throw err;
             }
             return user;
-        } catch (error) {
-            throw new Error(error.message);
+        } catch (error: any) {
+            // Preserve status code if already set
+            if (error.status) {
+                throw error;
+            }
+            // For other errors (like invalid ObjectId), return 400
+            const err: any = new Error(error.message || 'Invalid user ID');
+            err.status = 400;
+            throw err;
         }
     },
 
     async createUser(userData: Partial<IUserModel>): Promise<IUserModel> {
         try {
             if (!userData.email || !userData.password) {
-                throw new Error('Email and password are required');
+                const err: any = new Error('Email and password are required');
+                err.status = 400;
+                throw err;
             }
 
             // Normalize email to lowercase before checking existence and saving
-            const normalizedEmail = userData.email.toLowerCase();
+            const normalizedEmail = userData.email.toLowerCase().trim();
 
             // Check if user already exists
             const existingUser = await UserModel.findOne({ email: normalizedEmail });
             if (existingUser) {
-                throw new Error('User with this email already exists');
+                const err: any = new Error('User with this email already exists');
+                err.status = 400;
+                throw err;
+            }
+
+            // Validate USER role requires branch
+            const role = userData.role || 'USER';
+            if (role === 'USER' && (!userData.branch || userData.branch.trim() === '')) {
+                const err: any = new Error('Branch is required for USER role');
+                err.status = 400;
+                throw err;
             }
 
             // Create user with plain password - User model's pre-save hook will hash it
             const user = new UserModel({
                 email: normalizedEmail,
                 password: userData.password, // Plain password - pre-save hook will hash it
-                role: userData.role || 'USER',
+                role: role,
                 branch: userData.branch || '',
             });
 
-            return await user.save();
-        } catch (error) {
-            throw new Error(error.message);
+            const savedUser = await user.save();
+            
+            // Return user without password
+            return await UserModel.findById(savedUser._id).select('-password -passwordResetToken -passwordResetExpires -tokens') as IUserModel;
+        } catch (error: any) {
+            // Preserve status code if already set
+            if (error.status) {
+                throw error;
+            }
+            // For validation errors from Mongoose, return 400
+            if (error.name === 'ValidationError') {
+                const err: any = new Error(error.message);
+                err.status = 400;
+                throw err;
+            }
+            // For duplicate key errors, return 400
+            if (error.code === 11000) {
+                const err: any = new Error('User with this email already exists');
+                err.status = 400;
+                throw err;
+            }
+            // For other errors, return 500
+            const err: any = new Error(error.message || 'Internal Server Error');
+            err.status = 500;
+            throw err;
         }
     },
 
@@ -96,19 +146,25 @@ const AdminService: IAdminService = {
             
             // Handle branch update with validation
             if (userData.branch !== undefined && userData.branch !== user.branch) {
-                const remainingInCurrentBranch = await UserModel.countDocuments({
-                    branch: user.branch,
-                    _id: { $ne: user._id },
-                });
+                // Admins can be branchless or change branches freely
+                if (user.role === 'ADMIN') {
+                    user.branch = userData.branch || '';
+                } else {
+                    // For USER role, check if they're the only one in the branch
+                    const remainingInCurrentBranch = await UserModel.countDocuments({
+                        branch: user.branch,
+                        _id: { $ne: user._id },
+                    });
 
-                // If only this user is in the branch, block moving them out
-                if (remainingInCurrentBranch <= 0) {
-                    const err: any = new Error('Cannot change branch. This is the only user for this branch.');
-                    err.status = 400;
-                    throw err;
+                    // If only this user is in the branch, block moving them out
+                    if (remainingInCurrentBranch <= 0) {
+                        const err: any = new Error('Cannot change branch. This is the only user for this branch.');
+                        err.status = 400;
+                        throw err;
+                    }
+
+                    user.branch = userData.branch;
                 }
-
-                user.branch = userData.branch;
             }
 
             // Handle password update - set plain password, pre-save hook will hash it
@@ -116,12 +172,21 @@ const AdminService: IAdminService = {
                 user.password = userData.password; // Plain password - pre-save hook will hash it
             }
 
-            return await user.save();
-        } catch (error) {
+            const savedUser = await user.save();
+            
+            // Return user without password
+            return await UserModel.findById(savedUser._id).select('-password -passwordResetToken -passwordResetExpires -tokens') as IUserModel;
+        } catch (error: any) {
             if (error?.status) {
                 throw error;
             }
-            const err: any = new Error(error.message);
+            // For validation errors from Mongoose, return 400
+            if (error.name === 'ValidationError') {
+                const err: any = new Error(error.message);
+                err.status = 400;
+                throw err;
+            }
+            const err: any = new Error(error.message || 'Internal Server Error');
             err.status = 500;
             throw err;
         }

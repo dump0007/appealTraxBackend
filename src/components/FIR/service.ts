@@ -3,8 +3,21 @@ import { Types } from 'mongoose';
 import FIRModel, { IFIRModel } from './model';
 import FIRValidation from './validation';
 import { IFIRService } from './interface';
+import HttpError from '../../config/error';
+
+const sanitizeString = (value: any): any => {
+    if (typeof value !== 'string') return value;
+    // Remove script tags and their content; then remove any remaining angle-bracket tags
+    let sanitized = value.replace(/<script.*?>.*?<\/script>/gi, '');
+    sanitized = sanitized.replace(/<[^>]+>/g, '');
+    // Remove SQL injection patterns
+    sanitized = sanitized.replace(/'(\s*OR\s*'1'='1|;\s*DROP|;\s*DELETE|;\s*UPDATE|UNION\s*SELECT)/gi, '');
+    sanitized = sanitized.replace(/(\s*OR\s*'1'='1|\s*OR\s*1=1)/gi, '');
+    return sanitized;
+};
 
 const FIRService: IFIRService = {
+
     async findAll(email: string, branch?: string, isAdmin?: boolean): Promise<IFIRModel[]> {
         try {
             let firs: IFIRModel[];
@@ -12,7 +25,7 @@ const FIRService: IFIRService = {
             if (isAdmin) {
                 // Admin can see all FIRs
                 firs = await FIRModel.find({});
-            } else if (branch) {
+            } else if (branch && branch.trim() !== '') {
                 // Regular user: filter by branch
                 firs = await FIRModel.find({
                     $or: [
@@ -21,8 +34,8 @@ const FIRService: IFIRService = {
                     ]
                 });
             } else {
-                // No branch assigned - return empty results
-                firs = await FIRModel.find({ _id: { $exists: false } });
+                // No branch assigned or empty branch - return empty array (security: no data access)
+                return [];
             }
             
             // Populate proceedings - for branch-based access, show all proceedings for FIRs in branch
@@ -33,15 +46,12 @@ const FIRService: IFIRService = {
                         path: 'proceedings',
                         options: { sort: { sequence: 1 } }
                     });
-                } else if (branch) {
+                } else if (branch && branch.trim() !== '') {
                     // Regular user: show all proceedings for FIRs in their branch
                     await fir.populate({
                         path: 'proceedings',
                         options: { sort: { sequence: 1 } }
                     });
-                } else {
-                    // No branch assigned - no proceedings to show
-                    // (firs will be empty, so this won't execute)
                 }
             }
             return firs;
@@ -52,17 +62,34 @@ const FIRService: IFIRService = {
 
     async findOne(id: string, email: string, branch?: string, isAdmin?: boolean): Promise<IFIRModel> {
         try {
+            // Validate ObjectId format explicitly first (before Joi validation to avoid Joi errors)
+            if (!Types.ObjectId.isValid(id)) {
+                throw new HttpError(400, 'Invalid FIR ID format');
+            }
+            
+            // Try to create ObjectId to catch any creation errors
+            let objectId;
+            try {
+                objectId = new Types.ObjectId(id);
+            } catch (objIdError: any) {
+                throw new HttpError(400, 'Invalid FIR ID format');
+            }
+            
+            // Now validate with Joi (should pass since we already validated ObjectId format)
             const validate: Joi.ValidationResult = FIRValidation.byId({ id });
             if (validate.error) {
-                throw new Error(validate.error.message);
+                const errorMessage = validate.error.details && validate.error.details.length > 0
+                    ? validate.error.details.map((d: any) => d.message).join('; ')
+                    : (validate.error.message || 'Invalid FIR ID format');
+                throw new HttpError(400, errorMessage);
             }
             
             let fir;
             if (isAdmin) {
                 // Admin can view any FIR
-                fir = await FIRModel.findById(new Types.ObjectId(id));
+                fir = await FIRModel.findById(objectId);
                 if (!fir) {
-                    throw new Error('FIR not found');
+                    throw new HttpError(404, 'FIR not found');
                 }
                 // Populate all proceedings
                 await fir.populate({
@@ -72,14 +99,20 @@ const FIRService: IFIRService = {
             } else if (branch) {
                 // Regular user: verify FIR belongs to their branch
                 fir = await FIRModel.findOne({
-                    _id: new Types.ObjectId(id),
+                    _id: objectId,
                     $or: [
                         { branchName: branch },
                         { branch: branch }
                     ]
                 });
                 if (!fir) {
-                    throw new Error('FIR not found or access denied');
+                    // Check if FIR exists but belongs to different branch (403) or doesn't exist (404)
+                    const firExists = await FIRModel.findById(objectId);
+                    if (firExists) {
+                        throw new HttpError(403, 'Access denied');
+                    } else {
+                        throw new HttpError(404, 'FIR not found');
+                    }
                 }
                 // Populate all proceedings for FIRs in their branch
                 await fir.populate({
@@ -88,9 +121,9 @@ const FIRService: IFIRService = {
                 });
             } else {
                 // Fallback: verify ownership by email
-                fir = await FIRModel.findOne({ _id: new Types.ObjectId(id), email });
+                fir = await FIRModel.findOne({ _id: objectId, email });
                 if (!fir) {
-                    throw new Error('FIR not found or access denied');
+                    throw new HttpError(404, 'FIR not found or access denied');
                 }
                 await fir.populate({
                     path: 'proceedings',
@@ -99,16 +132,72 @@ const FIRService: IFIRService = {
                 });
             }
             return fir;
-        } catch (error) {
-            throw new Error(error.message);
+        } catch (error: any) {
+            // Preserve HttpError status codes, otherwise wrap in generic error
+            if (error instanceof HttpError) {
+                throw error;
+            }
+            // Convert validation errors or cast errors to 400
+            const errorMessage = error?.message || '';
+            if (error.name === 'ValidationError' || 
+                error.name === 'CastError' ||
+                errorMessage.includes('ObjectId') || 
+                errorMessage.includes('objectId') ||
+                errorMessage.includes('Cast to ObjectId') ||
+                errorMessage.includes('Argument passed in must be a string of 12 bytes') ||
+                errorMessage.includes('24 hex characters') ||
+                errorMessage.includes('Invalid')) {
+                throw new HttpError(400, 'Invalid FIR ID format');
+            }
+            // Log unexpected errors for debugging
+            console.error('Unexpected error in FIRService.findOne:', error);
+            throw new HttpError(500, errorMessage || 'Internal Server Error');
         }
     },
 
-    async insert(body: IFIRModel, email: string): Promise<IFIRModel> {
+    async insert(body: IFIRModel, email: string, branch?: string, isAdmin?: boolean): Promise<IFIRModel> {
         try {
+            // Access control check BEFORE validation (for proper 403 status)
+            if (!isAdmin) {
+                const effectiveBranch = branch || body.branch || body.branchName;
+                if (!effectiveBranch || String(effectiveBranch).trim() === '') {
+                    throw new HttpError(403, 'Branch is required for FIR creation');
+                }
+            }
+
+            // Sanitize key string fields to prevent script/SQL injection
+            body.petitionerName = sanitizeString(body.petitionerName);
+            body.petitionerFatherName = sanitizeString(body.petitionerFatherName);
+            body.petitionerAddress = sanitizeString(body.petitionerAddress);
+            body.petitionerPrayer = sanitizeString(body.petitionerPrayer);
+            body.firNumber = sanitizeString(body.firNumber);
+            body.writNumber = sanitizeString(body.writNumber);
+            body.underSection = sanitizeString(body.underSection);
+            body.act = sanitizeString(body.act);
+            body.policeStation = sanitizeString(body.policeStation);
+            if (body.respondents && Array.isArray(body.respondents)) {
+                body.respondents = body.respondents.map(r => ({
+                    ...r,
+                    name: sanitizeString(r?.name),
+                    designation: sanitizeString(r?.designation),
+                }));
+            }
+            if (body.investigatingOfficers && Array.isArray(body.investigatingOfficers)) {
+                body.investigatingOfficers = body.investigatingOfficers.map(io => ({
+                    ...io,
+                    name: sanitizeString(io?.name),
+                    rank: sanitizeString(io?.rank),
+                    posting: sanitizeString(io?.posting),
+                }));
+            }
+
             const validate: Joi.ValidationResult = FIRValidation.create(body);
             if (validate.error) {
-                throw new Error(validate.error.message);
+                // Format Joi validation error message from details array
+                const errorMessage = validate.error.details && validate.error.details.length > 0
+                    ? validate.error.details.map((d: any) => d.message).join('; ')
+                    : (validate.error.message || 'Validation error');
+                throw new HttpError(400, errorMessage);
             }
 
             // Normalize date fields (store as UTC midnight where applicable)
@@ -118,6 +207,10 @@ const FIRService: IFIRService = {
                 }
                 if (typeof value === 'string') {
                     if (!value) return undefined;
+                    // If already an ISO string with time, use directly; otherwise coerce to midnight UTC
+                    if (value.includes('T')) {
+                        return new Date(value);
+                    }
                     return new Date(`${value}T00:00:00.000Z`);
                 }
                 return new Date(value);
@@ -148,7 +241,10 @@ const FIRService: IFIRService = {
                 body.investigatingOfficerTo = firstIO.to || undefined;
             }
 
-            body.branch = body.branchName;
+            // Normalize branch fields
+            if (!body.branch && body.branchName) {
+                body.branch = body.branchName;
+            }
             body.sections = body.sections && body.sections.length > 0 ? body.sections : [body.underSection].filter(Boolean);
             // Handle writSubType: set to undefined (not null) when writType is not BAIL
             if (body.writType !== 'BAIL') {
@@ -163,16 +259,42 @@ const FIRService: IFIRService = {
 
             // title/description removed - using petitionerPrayer instead
 
-            // Set email from token
-            body.email = email;
+            // Access control: admins bypass branch requirement; users must supply/own branch
+            // (Branch check already done above before validation)
+            if (isAdmin) {
+                // Admin can create for any branch; ensure branch fields stay consistent
+                if (body.branchName) {
+                    body.branch = body.branchName;
+                }
+                body.email = body.email || email;
+            } else {
+                const effectiveBranch = branch || body.branch || body.branchName;
+                body.branch = effectiveBranch;
+                body.branchName = effectiveBranch;
+                // Set ownership to requesting user
+                body.email = email;
+            }
             const fir: IFIRModel = await FIRModel.create(body);
 
             // No longer creating initial proceeding automatically
             // User will manually create proceeding in Step 2 of the form
 
             return fir;
-        } catch (error) {
-            throw new Error(error.message);
+        } catch (error: any) {
+            // Preserve HttpError status codes
+            if (error instanceof HttpError) {
+                throw error;
+            }
+            // Convert validation errors to 400
+            if (error.name === 'ValidationError' || error.message?.includes('validation')) {
+                throw new HttpError(400, error.message || 'Validation error');
+            }
+            // Convert duplicate key errors to 409
+            if (error.code === 11000) {
+                throw new HttpError(409, 'Duplicate entry');
+            }
+            // For other errors, wrap in HttpError with 500
+            throw new HttpError(500, error.message || 'Internal Server Error');
         }
     },
 
@@ -185,11 +307,60 @@ const FIRService: IFIRService = {
         try {
             const validate: Joi.ValidationResult = FIRValidation.byId({ id });
             if (validate.error) {
-                throw new Error(validate.error.message);
+                throw new HttpError(400, validate.error.message);
             }
-            const updateValidate: Joi.ValidationResult = FIRValidation.create(body);
+            
+            // Build query to find FIR (with access control)
+            let query: any = { _id: new Types.ObjectId(id) };
+            
+            if (isAdmin) {
+                // Admin can update any FIR - no restrictions
+            } else if (branch) {
+                // Regular user: verify FIR belongs to their branch
+                query.$or = [
+                    { branchName: branch },
+                    { branch: branch }
+                ];
+            } else {
+                // Fallback: verify ownership by email
+                query.email = email;
+            }
+            
+            // Fetch existing FIR to merge with update body
+            const existingFIR: IFIRModel = await FIRModel.findOne(query);
+            if (!existingFIR) {
+                throw new HttpError(404, 'FIR not found or access denied');
+            }
+            
+            // Check if trying to change writType when ARGUMENT proceeding exists
+            if (body.writType && body.writType !== existingFIR.writType) {
+                const ProceedingModel = (await import('../Proceeding/model')).default;
+                const argumentProceeding = await ProceedingModel.findOne({
+                    fir: existingFIR._id,
+                    type: 'ARGUMENT',
+                    draft: false
+                });
+                if (argumentProceeding) {
+                    throw new HttpError(403, 'Cannot change writType when ARGUMENT proceeding exists');
+                }
+            }
+            
+            // Merge update body with existing FIR data (update body takes precedence)
+            const mergedBody = {
+                ...existingFIR.toObject(),
+                ...body,
+                _id: existingFIR._id, // Preserve _id
+                email: existingFIR.email, // Don't allow email updates
+            };
+            
+            // Validate merged data (cast to IFIRModel for validation)
+            const updateValidate: Joi.ValidationResult = FIRValidation.create(mergedBody as IFIRModel);
             if (updateValidate.error) {
-                throw new Error(updateValidate.error.message);
+                // Format Joi validation error message from details array
+                const errorMessage = updateValidate.error.details
+                    ? updateValidate.error.details.map((d: any) => d.message).join('; ')
+                    : updateValidate.error.message || 'Validation error';
+                throw new HttpError(400, errorMessage);
             }
 
             // Normalize date fields (store as UTC midnight where applicable)
@@ -204,12 +375,41 @@ const FIRService: IFIRService = {
                 return new Date(value);
             };
 
-            body.dateOfFIR = normalizeDate(body.dateOfFIR) as Date;
-            body.dateOfFiling = body.dateOfFIR; // legacy compatibility
+            // Use merged body for normalization
+            const updateData: any = { ...mergedBody };
+            
+            // Sanitize string fields in update data
+            updateData.petitionerName = sanitizeString(updateData.petitionerName);
+            updateData.petitionerFatherName = sanitizeString(updateData.petitionerFatherName);
+            updateData.petitionerAddress = sanitizeString(updateData.petitionerAddress);
+            updateData.petitionerPrayer = sanitizeString(updateData.petitionerPrayer);
+            updateData.firNumber = sanitizeString(updateData.firNumber);
+            updateData.writNumber = sanitizeString(updateData.writNumber);
+            updateData.underSection = sanitizeString(updateData.underSection);
+            updateData.act = sanitizeString(updateData.act);
+            updateData.policeStation = sanitizeString(updateData.policeStation);
+            if (updateData.respondents && Array.isArray(updateData.respondents)) {
+                updateData.respondents = updateData.respondents.map((r: any) => ({
+                    ...r,
+                    name: sanitizeString(r?.name),
+                    designation: sanitizeString(r?.designation),
+                }));
+            }
+            if (updateData.investigatingOfficers && Array.isArray(updateData.investigatingOfficers)) {
+                updateData.investigatingOfficers = updateData.investigatingOfficers.map((io: any) => ({
+                    ...io,
+                    name: sanitizeString(io?.name),
+                    rank: sanitizeString(io?.rank),
+                    posting: sanitizeString(io?.posting),
+                }));
+            }
+            
+            updateData.dateOfFIR = normalizeDate(updateData.dateOfFIR) as Date;
+            updateData.dateOfFiling = updateData.dateOfFIR; // legacy compatibility
 
             // Normalize dates in investigatingOfficers array
-            if (body.investigatingOfficers && Array.isArray(body.investigatingOfficers)) {
-                body.investigatingOfficers = body.investigatingOfficers.map(io => ({
+            if (updateData.investigatingOfficers && Array.isArray(updateData.investigatingOfficers)) {
+                updateData.investigatingOfficers = updateData.investigatingOfficers.map((io: any) => ({
                     ...io,
                     from: normalizeDate(io.from) || undefined,
                     to: normalizeDate(io.to) || undefined,
@@ -217,59 +417,54 @@ const FIRService: IFIRService = {
             }
 
             // Legacy fields for compatibility (use first IO if available)
-            const firstIO = body.investigatingOfficers && body.investigatingOfficers.length > 0 
-                ? body.investigatingOfficers[0] 
+            const firstIO = updateData.investigatingOfficers && updateData.investigatingOfficers.length > 0 
+                ? updateData.investigatingOfficers[0] 
                 : null;
             if (firstIO) {
-                body.investigatingOfficer = firstIO.name;
-                body.investigatingOfficerRank = firstIO.rank;
-                body.investigatingOfficerPosting = firstIO.posting;
-                body.investigatingOfficerContact = firstIO.contact;
-                body.investigatingOfficerFrom = firstIO.from || undefined;
-                body.investigatingOfficerTo = firstIO.to || undefined;
+                updateData.investigatingOfficer = firstIO.name;
+                updateData.investigatingOfficerRank = firstIO.rank;
+                updateData.investigatingOfficerPosting = firstIO.posting;
+                updateData.investigatingOfficerContact = firstIO.contact;
+                updateData.investigatingOfficerFrom = firstIO.from || undefined;
+                updateData.investigatingOfficerTo = firstIO.to || undefined;
             }
 
-            body.branch = body.branchName;
-            body.sections = body.sections && body.sections.length > 0 ? body.sections : [body.underSection].filter(Boolean);
+            updateData.branch = updateData.branchName;
+            updateData.sections = updateData.sections && updateData.sections.length > 0 ? updateData.sections : [updateData.underSection].filter(Boolean);
             // Handle writSubType: set to undefined (not null) when writType is not BAIL
-            if (body.writType !== 'BAIL') {
-                body.writSubType = undefined;
-            } else if (body.writSubType === null) {
+            if (updateData.writType !== 'BAIL') {
+                updateData.writSubType = undefined;
+            } else if (updateData.writSubType === null) {
                 // Convert null to undefined for Mongoose compatibility
-                body.writSubType = undefined;
+                updateData.writSubType = undefined;
             }
-            if (body.writType !== 'ANY_OTHER') {
-                body.writTypeOther = undefined;
+            if (updateData.writType !== 'ANY_OTHER') {
+                updateData.writTypeOther = undefined;
             }
-
-            // Don't update email - keep original
-            let query: any = { _id: new Types.ObjectId(id) };
             
-            if (isAdmin) {
-                // Admin can update any FIR - no restrictions
-                // No additional query filter needed
-            } else if (branch) {
-                // Regular user: verify FIR belongs to their branch
-                query.$or = [
-                    { branchName: branch },
-                    { branch: branch }
-                ];
-            } else {
-                // Fallback: verify ownership by email
-                query.email = email;
-            }
+            // Remove _id from update data (can't update _id)
+            delete updateData._id;
             
             const fir: IFIRModel = await FIRModel.findOneAndUpdate(
                 query,
-                { ...body, email: body.email || email }, // Keep original email or use body email
+                updateData,
                 { new: true, runValidators: true }
             );
             if (!fir) {
-                throw new Error('FIR not found or access denied');
+                throw new HttpError(404, 'FIR not found or access denied');
             }
             return fir;
-        } catch (error) {
-            throw new Error(error.message);
+        } catch (error: any) {
+            // Preserve HttpError status codes
+            if (error instanceof HttpError) {
+                throw error;
+            }
+            // Convert validation errors to 400
+            if (error.name === 'ValidationError' || error.message?.includes('validation')) {
+                throw new HttpError(400, error.message || 'Validation error');
+            }
+            // For other errors, wrap in HttpError with 500
+            throw new HttpError(500, error.message || 'Internal Server Error');
         }
     },
 
@@ -301,12 +496,29 @@ const FIRService: IFIRService = {
                 query.email = email;
             }
             
-            const fir: IFIRModel = await FIRModel.findOneAndRemove(query);
+            // Verify FIR exists and user has access before cascade delete
+            const fir: IFIRModel = await FIRModel.findOne(query);
             if (!fir) {
-                throw new Error('FIR not found or access denied');
+                throw new HttpError(404, 'FIR not found or access denied');
             }
-            return fir;
+            
+            // Cascade delete: Delete all proceedings associated with this FIR
+            const ProceedingModel = (await import('../Proceeding/model')).default;
+            const deletedProceedings = await ProceedingModel.deleteMany({ fir: new Types.ObjectId(id) });
+            
+            // Now delete the FIR
+            const deletedFIR: IFIRModel = await FIRModel.findOneAndRemove(query);
+            if (!deletedFIR) {
+                // This shouldn't happen since we already verified it exists, but handle it anyway
+                throw new HttpError(404, 'FIR not found or access denied');
+            }
+            
+            return deletedFIR;
         } catch (error) {
+            // Preserve HttpError status codes
+            if (error instanceof HttpError) {
+                throw error;
+            }
             throw new Error(error.message);
         }
     },
@@ -479,6 +691,11 @@ const FIRService: IFIRService = {
 
     async writTypeDistribution(email: string, branch?: string, isAdmin?: boolean): Promise<Array<{ type: string, count: number }>> {
         try {
+            // Early return for branchless users
+            if (!isAdmin && (!branch || branch.trim() === '')) {
+                return [];
+            }
+
             const allWritTypes = ['BAIL', 'QUASHING', 'DIRECTION', 'SUSPENSION_OF_SENTENCE', 'PAROLE', 'ANY_OTHER'];
             
             // Build match filter based on user role and branch
@@ -494,9 +711,6 @@ const FIRService: IFIRService = {
                         { branch: branch }
                     ]
                 };
-            } else {
-                // No branch assigned - return empty results
-                matchFilter = { _id: { $exists: false } };
             }
             
             const distribution = await FIRModel.aggregate([

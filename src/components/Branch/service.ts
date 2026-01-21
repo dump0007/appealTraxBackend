@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Types } from 'mongoose';
+import HttpError from '../../config/error';
 import FIRModel from '../FIR/model';
 import ProceedingModel from '../Proceeding/model';
 
@@ -27,14 +28,14 @@ const BranchService: IBranchService = {
     async createBranch(name: string): Promise<string[]> {
         try {
             if (!name || name.trim() === '') {
-                throw new Error('Branch name is required');
+                throw new HttpError(400, 'Branch name is required');
             }
 
             const branches = await this.getAllBranches();
             
             // Check if branch already exists
             if (branches.includes(name.trim())) {
-                throw new Error('Branch already exists');
+                throw new HttpError(400, 'Branch already exists');
             }
 
             branches.push(name.trim());
@@ -50,22 +51,22 @@ const BranchService: IBranchService = {
     async updateBranch(oldName: string, newName: string): Promise<string[]> {
         try {
             if (!oldName || oldName.trim() === '') {
-                throw new Error('Old branch name is required');
+                throw new HttpError(400, 'Old branch name is required');
             }
             if (!newName || newName.trim() === '') {
-                throw new Error('New branch name is required');
+                throw new HttpError(400, 'New branch name is required');
             }
 
             const branches = await this.getAllBranches();
             
             // Check if old branch exists
             if (!branches.includes(oldName.trim())) {
-                throw new Error('Old branch name not found');
+                throw new HttpError(404, 'Old branch name not found');
             }
 
             // Check if new branch name already exists
             if (branches.includes(newName.trim()) && oldName.trim() !== newName.trim()) {
-                throw new Error('New branch name already exists');
+                throw new HttpError(400, 'New branch name already exists');
             }
 
             // Update branches array
@@ -100,7 +101,7 @@ const BranchService: IBranchService = {
     async checkBranchDeletion(name: string): Promise<{ firCount: number; proceedingCount: number }> {
         try {
             if (!name || name.trim() === '') {
-                throw new Error('Branch name is required');
+                throw new HttpError(400, 'Branch name is required');
             }
 
             // Count FIRs with this branch
@@ -128,21 +129,28 @@ const BranchService: IBranchService = {
 
             return { firCount, proceedingCount };
         } catch (error) {
-            throw new Error(error.message);
+            throw error;
         }
     },
 
     async deleteBranchWithData(name: string): Promise<void> {
         try {
             if (!name || name.trim() === '') {
-                throw new Error('Branch name is required');
+                throw new HttpError(400, 'Branch name is required');
             }
 
             const branches = await this.getAllBranches();
             
-            // Check if branch exists
+            // Pre-check for linked FIRs/proceedings; if present, block deletion
+            const { firCount, proceedingCount } = await this.checkBranchDeletion(name);
+            if (firCount > 0 || proceedingCount > 0) {
+                // Use 403 to indicate operation not allowed due to linked data
+                throw new HttpError(403, 'Branch has linked FIRs or proceedings');
+            }
+
+            // Check if branch exists (after pre-check) - if not, treat as 404
             if (!branches.includes(name.trim())) {
-                throw new Error('Branch not found');
+                throw new HttpError(404, 'Branch not found');
             }
 
             // Get all FIRs with this branch
@@ -172,7 +180,7 @@ const BranchService: IBranchService = {
             const updatedBranches = branches.filter((b: string) => b !== name.trim());
             fs.writeFileSync(BRANCHES_FILE_PATH, JSON.stringify(updatedBranches, null, 2), 'utf-8');
         } catch (error) {
-            throw new Error(error.message);
+            throw error;
         }
     },
 };

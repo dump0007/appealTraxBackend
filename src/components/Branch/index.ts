@@ -26,7 +26,13 @@ export async function createBranch(req: Request, res: Response, next: NextFuncti
         const branches: string[] = await BranchService.createBranch(name);
         res.status(201).json(branches);
     } catch (error) {
-        next(new HttpError(error.status || 500, error.message || 'Failed to create branch'));
+        // Map known business errors to 400
+        const status = (error as any)?.status;
+        const message = (error as any)?.message;
+        if (message === 'Branch already exists' || message === 'Branch name is required') {
+            return next(new HttpError(400, message));
+        }
+        next(new HttpError(status || 500, message || 'Failed to create branch'));
     }
 }
 
@@ -75,7 +81,16 @@ export async function deleteBranch(req: Request, res: Response, next: NextFuncti
         await BranchService.deleteBranchWithData(name);
         res.status(200).json({ message: 'Branch and all associated data deleted successfully' });
     } catch (error) {
-        next(new HttpError(error.status || 500, error.message || 'Failed to delete branch'));
+        const status = (error as any)?.status;
+        const message = (error as any)?.message;
+        // Map known business errors to appropriate 4xx
+        if (message === 'Branch has linked FIRs or proceedings') {
+            return next(new HttpError(403, message));
+        }
+        if (message === 'Branch not found' || message === 'Branch name is required') {
+            return next(new HttpError(status || 404, message));
+        }
+        next(new HttpError(status || 500, message || 'Failed to delete branch'));
     }
 }
 

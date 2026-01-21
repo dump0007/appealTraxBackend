@@ -35,8 +35,13 @@ export async function findOne(req: RequestWithUser, res: Response, next: NextFun
         }
         const fir: IFIRModel = await FIRService.findOne(req.params.id, email, branch, isAdmin);
         res.status(200).json(fir);
-    } catch (error) {
-        next(new HttpError(error.status || 500, error.message || 'Internal Server Error'));
+    } catch (error: any) {
+        // Preserve HttpError instances
+        if (error instanceof HttpError) {
+            return next(error);
+        }
+        // Convert other errors
+        next(new HttpError(error?.status || 500, error?.message || 'Internal Server Error'));
     }
 }
 
@@ -44,11 +49,13 @@ export async function create(req: RequestWithUser, res: Response, next: NextFunc
     try {
         const email = req.email || (req.user as any)?.email;
         const branch = req.branch;
+        const role = req.role;
+        const isAdmin = role === 'ADMIN';
         
         if (!email) {
             return next(new HttpError(401, 'User email not found in token'));
         }
-        const fir: IFIRModel = await FIRService.insert(req.body, email);
+        const fir: IFIRModel = await FIRService.insert(req.body, email, branch, isAdmin);
         
         // Audit log - create FIR
         logAuditEntry({

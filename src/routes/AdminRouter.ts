@@ -25,8 +25,12 @@ router.delete('/users/:id', AdminComponent.deleteUser);
 /**
  * Data Access Routes
  */
-router.get('/firs', AdminComponent.getAllFIRs);
-router.get('/proceedings', AdminComponent.getAllProceedings);
+router.get('/firs', AdminComponent.adminFindAllFIRs);
+router.get('/firs/:id', AdminComponent.adminFindFIRById);
+router.post('/firs', AdminComponent.adminCreateFIR);
+router.put('/firs/:id', AdminComponent.adminUpdateFIR);
+router.delete('/firs/:id', AdminComponent.adminDeleteFIR);
+// Note: Admin-specific proceeding routes are defined below (lines 52-56) to bypass branch restrictions
 
 /**
  * Analytics Routes
@@ -45,6 +49,15 @@ router.get('/affidavit-metrics', AdminComponent.getAdminAffidavitMetrics);
 router.get('/audit-logs', AdminComponent.getAuditLogs);
 router.get('/user-logs', AdminComponent.getUserActivityLogs);
 router.get('/audit/operations', AuditLogComponent.getOperationLogs);
+
+/**
+ * Proceedings Routes (admin-only bypass)
+ */
+router.get('/proceedings', AdminComponent.adminFindAllProceedings);
+router.get('/proceedings/:id', AdminComponent.adminFindProceedingById);
+router.post('/proceedings', AdminComponent.adminCreateProceeding);
+router.put('/proceedings/:id', AdminComponent.adminUpdateProceeding);
+router.delete('/proceedings/:id', AdminComponent.adminDeleteProceeding);
 
 /**
  * Config Routes

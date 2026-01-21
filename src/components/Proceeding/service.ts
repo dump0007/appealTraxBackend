@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import ProceedingModel, { IProceedingModel } from './model';
 import ProceedingValidation from './validation';
 import { IProceedingService } from './interface';
+import HttpError from '../../config/error';
 
 const ProceedingService: IProceedingService = {
     async findAll(email: string, branch?: string, isAdmin?: boolean): Promise<IProceedingModel[]> {
@@ -33,13 +34,13 @@ const ProceedingService: IProceedingService = {
                     .populate('createdBy');
             } else {
                 // No branch assigned - return empty results
-                return await ProceedingModel.find({ _id: { $exists: false } })
-                    .sort({ fir: 1, sequence: 1 })
-                    .populate('fir')
-                    .populate('createdBy');
+                return [];
             }
-        } catch (error) {
-            throw new Error(error.message);
+        } catch (error: any) {
+            if (error instanceof HttpError) {
+                throw error;
+            }
+            throw new HttpError(500, error.message || 'Internal Server Error');
         }
     },
 
@@ -47,7 +48,7 @@ const ProceedingService: IProceedingService = {
         try {
             const validate: Joi.ValidationResult = ProceedingValidation.byFIR({ firId });
             if (validate.error) {
-                throw new Error(validate.error.message);
+                throw new HttpError(400, validate.error.message);
             }
             
             // Verify the FIR belongs to user's branch (or allow admin to view any FIR)
@@ -69,14 +70,15 @@ const ProceedingService: IProceedingService = {
                     ]
                 });
                 if (!fir) {
-                    throw new Error('FIR not found or access denied');
+                    const exists = await FIRModel.findById(new Types.ObjectId(firId));
+                    if (exists) {
+                        throw new HttpError(403, 'Access denied');
+                    }
+                    throw new HttpError(404, 'FIR not found');
                 }
             } else {
                 // No branch assigned - return empty results
-                return await ProceedingModel.find({ _id: { $exists: false } })
-                    .sort({ sequence: 1 })
-                    .populate('fir')
-                    .populate('createdBy');
+                return [];
             }
             
             // Only return non-draft proceedings
@@ -85,8 +87,11 @@ const ProceedingService: IProceedingService = {
                 .sort({ sequence: 1 })
                 .populate('fir')
                 .populate('createdBy');
-        } catch (error) {
-            throw new Error(error.message);
+        } catch (error: any) {
+            if (error instanceof HttpError) {
+                throw error;
+            }
+            throw new HttpError(500, error.message || 'Internal Server Error');
         }
     },
 
@@ -94,7 +99,7 @@ const ProceedingService: IProceedingService = {
         try {
             const validate: Joi.ValidationResult = ProceedingValidation.byId({ id });
             if (validate.error) {
-                throw new Error(validate.error.message);
+                throw new HttpError(400, validate.error.message);
             }
             
             let proceeding;
@@ -104,7 +109,7 @@ const ProceedingService: IProceedingService = {
                     .populate('fir')
                     .populate('createdBy');
                 if (!proceeding) {
-                    throw new Error('Proceeding not found');
+                    throw new HttpError(404, 'Proceeding not found');
                 }
             } else if (branch) {
                 // Regular user: verify proceeding's FIR belongs to their branch
@@ -112,20 +117,24 @@ const ProceedingService: IProceedingService = {
                     .populate('fir')
                     .populate('createdBy');
                 if (!proceeding) {
-                    throw new Error('Proceeding not found');
+                    throw new HttpError(404, 'Proceeding not found');
                 }
                 // Check if FIR belongs to user's branch
                 const fir = proceeding.fir as any;
                 const firBranch = fir?.branchName || fir?.branch;
                 if (firBranch !== branch) {
-                    throw new Error('Proceeding not found or access denied');
+                    throw new HttpError(403, 'Access denied');
                 }
             } else {
                 // No branch assigned - access denied
-                throw new Error('Proceeding not found or access denied');
+                throw new HttpError(403, 'Access denied');
             }
             return proceeding;
         } catch (error) {
+            // Preserve HttpError status codes, otherwise wrap in generic error
+            if (error instanceof HttpError) {
+                throw error;
+            }
             throw new Error(error.message);
         }
     },
@@ -156,7 +165,11 @@ const ProceedingService: IProceedingService = {
                     ]
                 });
                 if (!fir) {
-                    throw new Error('FIR not found or access denied');
+                    const exists = await FIRModel.findById(new Types.ObjectId(firId));
+                    if (exists) {
+                        throw new HttpError(403, 'Access denied');
+                    }
+                    throw new HttpError(404, 'FIR not found');
                 }
             } else {
                 // No branch assigned - return null
@@ -167,8 +180,11 @@ const ProceedingService: IProceedingService = {
             return await ProceedingModel.findOne({ fir: new Types.ObjectId(firId), draft: true })
                 .populate('fir')
                 .populate('createdBy');
-        } catch (error) {
-            throw new Error(error.message);
+        } catch (error: any) {
+            if (error instanceof HttpError) {
+                throw error;
+            }
+            throw new HttpError(500, error.message || 'Internal Server Error');
         }
     },
 
@@ -385,14 +401,13 @@ const ProceedingService: IProceedingService = {
             
             const validate: Joi.ValidationResult = ProceedingValidation.create(validationPayload);
             if (validate.error) {
-                throw new Error(validate.error.message);
+                const msg = validate.error.details
+                    ? validate.error.details.map((d: any) => d.message).join('; ')
+                    : validate.error.message;
+                throw new HttpError(400, msg || 'Validation error');
             }
-            // Check if user is admin
-            const UserModel = (await import('../User/model')).default;
-            const user = await UserModel.findOne({ email });
-            const isAdmin = user && user.role === 'ADMIN';
             
-            // Verify the FIR belongs to this user (or allow admin to create for any FIR)
+            // Use the isAdmin parameter passed from controller (don't query database)
             // Admin access: Admins can create proceedings for any FIR without restrictions
             // Regular user: Can only create proceedings for FIRs in their branch (filtered by branch)
             const FIRModel = (await import('../FIR/model')).default;
@@ -401,7 +416,7 @@ const ProceedingService: IProceedingService = {
                 // Admin can create proceedings for any FIR - no restrictions
                 fir = await FIRModel.findById(body.fir);
                 if (!fir) {
-                    throw new Error('FIR not found');
+                    throw new HttpError(404, 'FIR not found');
                 }
                 // Associate proceeding with FIR owner's email (not admin's email)
                 body.email = fir.email;
@@ -415,13 +430,17 @@ const ProceedingService: IProceedingService = {
                     ]
                 });
                 if (!fir) {
-                    throw new Error('FIR not found or access denied');
+                    const exists = await FIRModel.findById(body.fir);
+                    if (exists) {
+                        throw new HttpError(403, 'Access denied');
+                    }
+                    throw new HttpError(404, 'FIR not found');
                 }
                 // Set email from token
                 body.email = email;
             } else {
                 // No branch assigned - access denied
-                throw new Error('FIR not found or access denied');
+                throw new HttpError(403, 'Access denied');
             }
             
             // If this is a draft, check if a draft already exists for this FIR
@@ -442,7 +461,32 @@ const ProceedingService: IProceedingService = {
                 body.sequence = last && typeof last.sequence === 'number' ? last.sequence + 1 : 1;
             }
             
-            const proceeding = await ProceedingModel.create(body);
+            // Create proceeding with retry logic for concurrent sequence assignment
+            let proceeding;
+            let retries = 5; // Increased retries from 3 to 5
+            while (retries > 0) {
+                try {
+                    proceeding = await ProceedingModel.create(body);
+                    break; // Success, exit retry loop
+                } catch (error: any) {
+                    // Handle duplicate key error on sequence (E11000)
+                    if (error.code === 11000 && error.keyPattern && (error.keyPattern.sequence || error.keyPattern['fir_1_sequence_1'])) {
+                        retries--;
+                        if (retries === 0) {
+                            // Return 409 Conflict instead of 500 for sequence conflicts
+                            throw new HttpError(409, 'Failed to create proceeding after retries due to sequence conflict. Please try again.');
+                        }
+                        // Recalculate sequence and retry
+                        const last = await ProceedingModel.findOne({ fir: body.fir, draft: false }).sort({ sequence: -1 }).select('sequence').lean();
+                        body.sequence = last && typeof last.sequence === 'number' ? last.sequence + 1 : 1;
+                        // Small delay to reduce contention (increased from 10ms to 50ms)
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    } else {
+                        // Not a sequence conflict, throw immediately
+                        throw error;
+                    }
+                }
+            }
             
             // Debug logging - log the actual proceeding that was created
             console.log(`[ProceedingService] Proceeding created with ID: ${proceeding._id}`);
@@ -511,10 +555,23 @@ const ProceedingService: IProceedingService = {
             }
             
             return proceeding;
-        } catch (error) {
+        } catch (error: any) {
             console.log("ERROR ->",error);
             
-            throw new Error(error.message);
+            // Preserve HttpError status codes
+            if (error instanceof HttpError) {
+                throw error;
+            }
+            // Convert validation errors to 400
+            if (error.name === 'ValidationError' || error.message?.includes('validation')) {
+                throw new HttpError(400, error.message || 'Validation error');
+            }
+            // Convert duplicate key errors to 409
+            if (error.code === 11000) {
+                throw new HttpError(409, 'Duplicate entry');
+            }
+            // For other errors, wrap in HttpError with 500
+            throw new HttpError(500, error.message || 'Internal Server Error');
         }
     },
 
@@ -528,7 +585,7 @@ const ProceedingService: IProceedingService = {
         try {
             const validate: Joi.ValidationResult = ProceedingValidation.byId({ id });
             if (validate.error) {
-                throw new Error(validate.error.message);
+                throw new HttpError(400, validate.error.message);
             }
 
             // Find existing proceeding
@@ -543,7 +600,7 @@ const ProceedingService: IProceedingService = {
                     const FIRModel = (await import('../FIR/model')).default;
                     const fir = await FIRModel.findById(existingProceeding.fir);
                     if (!fir || (fir.branchName !== branch && fir.branch !== branch)) {
-                        throw new Error('Proceeding not found or access denied');
+                        throw new HttpError(403, 'Access denied');
                     }
                 }
             } else {
@@ -551,7 +608,7 @@ const ProceedingService: IProceedingService = {
             }
             
             if (!existingProceeding) {
-                throw new Error('Proceeding not found or access denied');
+                throw new HttpError(404, 'Proceeding not found');
             }
 
             // Verify FIR is completed (has non-draft proceedings)
@@ -572,7 +629,7 @@ const ProceedingService: IProceedingService = {
             }
             
             if (!fir) {
-                throw new Error('FIR not found or access denied');
+                throw new HttpError(404, 'FIR not found');
             }
 
             // Check if FIR has completed proceedings
@@ -584,7 +641,7 @@ const ProceedingService: IProceedingService = {
             }
             const hasCompletedProceedings = allProceedings.length > 0 && allProceedings.some(p => !p.draft);
             if (!hasCompletedProceedings) {
-                throw new Error('Cannot edit proceeding: FIR must be fully completed before editing');
+                throw new HttpError(400, 'Cannot edit proceeding: FIR must be fully completed before editing');
             }
 
             // Clean up empty date strings and empty objects before validation (same as insert)
@@ -694,21 +751,29 @@ const ProceedingService: IProceedingService = {
                 }
             }
 
+            // Merge body with existing proceeding for validation (partial updates)
             const validationPayload: any = {
+                ...existingProceeding.toObject(),
                 ...body,
                 createdBy: typeof existingProceeding.createdBy === 'string'
                     ? existingProceeding.createdBy
                     : (existingProceeding.createdBy as Types.ObjectId).toHexString(),
+                fir: typeof existingProceeding.fir === 'string'
+                    ? existingProceeding.fir
+                    : (existingProceeding.fir as Types.ObjectId).toHexString(),
             };
 
             const updateValidate: Joi.ValidationResult = ProceedingValidation.create(validationPayload);
             if (updateValidate.error) {
-                throw new Error(updateValidate.error.message);
+                const msg = updateValidate.error.details
+                    ? updateValidate.error.details.map((d: any) => d.message).join('; ')
+                    : updateValidate.error.message;
+                throw new HttpError(400, msg || 'Validation error');
             }
 
             // Verify the FIR belongs to this user
             if (!fir) {
-                throw new Error('FIR not found or access denied');
+                throw new HttpError(404, 'FIR not found');
             }
 
             // Don't update email, fir, sequence, or createdBy
@@ -748,7 +813,7 @@ const ProceedingService: IProceedingService = {
             );
 
             if (!updatedProceeding) {
-                throw new Error('Proceeding not found or access denied');
+                throw new HttpError(404, 'Proceeding not found');
             }
 
             // NOTE: Soft-delete behavior - do NOT remove files from disk here.
@@ -773,8 +838,21 @@ const ProceedingService: IProceedingService = {
             }
 
             return updatedProceeding;
-        } catch (error) {
-            throw new Error(error.message);
+        } catch (error: any) {
+            // Preserve HttpError status codes
+            if (error instanceof HttpError) {
+                throw error;
+            }
+            // Convert validation errors to 400
+            if (error.name === 'ValidationError' || error.message?.includes('validation')) {
+                throw new HttpError(400, error.message || 'Validation error');
+            }
+            // Convert duplicate key errors to 409
+            if (error.code === 11000) {
+                throw new HttpError(409, 'Duplicate entry');
+            }
+            // For other errors, wrap in HttpError with 500
+            throw new HttpError(500, error.message || 'Internal Server Error');
         }
     },
 
@@ -803,7 +881,7 @@ const ProceedingService: IProceedingService = {
                     const FIRModel = (await import('../FIR/model')).default;
                     const fir = await FIRModel.findById(proceeding.fir);
                     if (!fir || (fir.branchName !== branch && fir.branch !== branch)) {
-                        throw new Error('Proceeding not found or access denied');
+                        throw new HttpError(403, 'Access denied');
                     }
                 }
             } else {
@@ -811,17 +889,20 @@ const ProceedingService: IProceedingService = {
             }
             
             if (!proceeding) {
-                throw new Error('Proceeding not found or access denied');
+                throw new HttpError(404, 'Proceeding not found or access denied');
             }
             
             // Use the proceeding we already found and verified
             const deletedProceeding = await ProceedingModel.findOneAndRemove({ _id: new Types.ObjectId(id) });
             if (!deletedProceeding) {
-                throw new Error('Proceeding not found or access denied');
+                throw new HttpError(404, 'Proceeding not found or access denied');
             }
             return deletedProceeding;
-        } catch (error) {
-            throw new Error(error.message);
+        } catch (error: any) {
+            if (error instanceof HttpError) {
+                throw error;
+            }
+            throw new HttpError(500, error.message || 'Internal Server Error');
         }
     },
 
